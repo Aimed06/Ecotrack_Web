@@ -15,3 +15,10 @@ a { text-decoration: none; color: inherit; }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #F3F4F6; }
 ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Leaflet popup reset */
+.leaflet-popup-content { margin: 0; padding: 0; }
+.leaflet-popup-content-wrapper { padding: 0; border-radius: 14px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,0.18); border: 1px solid rgba(0,0,0,0.06); }
+.leaflet-popup-tip-container { margin-top: -1px; }

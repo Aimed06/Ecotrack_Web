@@ -88,4 +88,4 @@ Palette dans `src/constants/colors.ts` (identique au frontend mobile).
 
 ## Points à terminer
 
-- La file de modération charge tout d'un coup (pas de pagination) — acceptable tant que le volume reste faible
+Aucun — le dashboard est complet.

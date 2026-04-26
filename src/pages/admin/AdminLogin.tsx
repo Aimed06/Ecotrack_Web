@@ -41,6 +41,7 @@ export default function AdminLogin() {
             <input
               style={s.input}
               type="email"
+              autoComplete='username'
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="admin@ecotrack.dz"
@@ -52,6 +53,7 @@ export default function AdminLogin() {
             <input
               style={s.input}
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
