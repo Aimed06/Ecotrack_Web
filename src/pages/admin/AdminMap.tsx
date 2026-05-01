@@ -81,11 +81,12 @@ export default function AdminMap() {
   const [evenements, setEvenements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLayers, setActiveLayers] = useState<Set<LayerKey>>(
-    new Set(['signalements', 'points', 'evenements'])
+    new Set(['signalements'])
   );
   const [wilaya, setWilaya] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [degreFilter, setDegreFilter] = useState<number[]>([]);
+  const [photosResoluOnly, setPhotosResoluOnly] = useState(false);
 
   const toggleType  = (v: string) =>
     setTypeFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
@@ -113,9 +114,16 @@ export default function AdminMap() {
     });
   };
 
+  const parsePhotos = (val: any): string[] => {
+    if (Array.isArray(val)) return val;
+    if (typeof val === 'string') { try { return JSON.parse(val); } catch { return []; } }
+    return [];
+  };
+
   const filteredS = signalements.filter(s => {
     if (wilaya && s.wilaya !== wilaya) return false;
     if (degreFilter.length > 0 && !degreFilter.includes(s.degre_pollution)) return false;
+    if (photosResoluOnly && parsePhotos(s.photos_resolution).length === 0) return false;
     return true;
   });
   const filteredE = wilaya ? evenements.filter(e => e.wilaya === wilaya) : evenements;
@@ -202,6 +210,17 @@ export default function AdminMap() {
               <button style={ms.typeChipClear} onClick={() => setTypeFilter([])}>✕</button>
             )}
           </div>
+        </div>
+
+        <div style={ms.typeWrap}>
+          <p style={ms.controlTitle}>À résoudre 🔧</p>
+          <button
+            style={{ ...ms.typeChip, ...(photosResoluOnly ? { borderColor: Colors.primary, background: Colors.primaryLight, color: Colors.primary, fontWeight: 700 } : {}) }}
+            onClick={() => setPhotosResoluOnly(v => !v)}
+          >
+            📷 Avec photos de résolution
+            {photosResoluOnly && <span style={{ marginLeft: 4 }}>✓</span>}
+          </button>
         </div>
 
         <div style={ms.legend}>

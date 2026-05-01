@@ -1,10 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Colors } from '../../constants/colors';
 import {
   getAdminStats, getModerationQueue, getUtilisateurs,
   modererAssociation, modererEvenementAdmin,
   modererSignalement, modererPointCollecte,
+  getAssociations, creerAssociationAdmin, supprimerAssociation,
+  getSignalements,
+  getPointsAdmin, creerPointCollecte, supprimerPointCollecteAdmin, modifierPointCollecteAdmin,
 } from '../../api';
 import AdminMap from './AdminMap';
 import WILAYAS from '../../constants/wilayas';
@@ -30,11 +33,12 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 const DEGRE_COLORS = ['', '#22c55e', '#84cc16', Colors.orange, '#f97316', Colors.red];
 const DEGRE_BG     = ['', '#f0fdf4', '#f7fee7', Colors.orangeLight, '#fff7ed', Colors.redLight];
 const DEGRE_LABELS = ['', 'Très léger', 'Léger', 'Modéré', 'Grave', 'Critique'];
-const MODERATION_TABS: Tab[] = ['associations', 'evenements', 'signalements', 'points'];
+const MODERATION_TABS: Tab[] = ['evenements', 'signalements'];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [tab, setTab]         = useState<Tab>('stats');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'stats');
   const [stats, setStats]     = useState<Stats | null>(null);
   const [queue, setQueue]     = useState<Queue | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,6 +55,31 @@ export default function AdminDashboard() {
   const [wilayaFilter, setWilayaFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [degreFilter, setDegreFilter] = useState<number[]>([]);
+
+  const POINTS_PAGE_SIZE = 10;
+  const [pointsList, setPointsList]   = useState<any[]>([]);
+  const [pointsTotal, setPointsTotal] = useState(0);
+  const [pointsPage, setPointsPage]   = useState(1);
+  const [pointsLoading, setPointsLoading] = useState(false);
+  const [showCreatePoint, setShowCreatePoint] = useState(false);
+  const [deletePointTarget, setDeletePointTarget] = useState<number | null>(null);
+  const [editPointTarget, setEditPointTarget] = useState<any | null>(null);
+  const [editPointForm, setEditPointForm] = useState({ nom: '', wilaya: '', adresse: '', horaires: '', description: '', type_dechet: [] as string[] });
+  const [editPointLoading, setEditPointLoading] = useState(false);
+  const [editPointError, setEditPointError] = useState('');
+  const [createPointForm, setCreatePointForm] = useState({
+    nom: '', wilaya: '', adresse: '', horaires: '', description: '',
+    latitude: '', longitude: '', type_dechet: [] as string[],
+  });
+  const [createPointLoading, setCreatePointLoading] = useState(false);
+  const [createPointError, setCreatePointError] = useState('');
+  const [pointsWilaya, setPointsWilaya] = useState('');
+  const [pointsStatut, setPointsStatut] = useState('');
+  const [pointsTypeFilter, setPointsTypeFilter] = useState('');
+
+  const [signalMode, setSignalMode] = useState<'moderation' | 'a_resoudre'>('moderation');
+  const [resoudreItems, setResoudreItems] = useState<any[]>([]);
+  const [resoudreLoading, setResoudreLoading] = useState(false);
 
   const toggleType  = (v: string) =>
     setTypeFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
@@ -80,6 +109,17 @@ export default function AdminDashboard() {
   const [usersTotal, setUsersTotal]   = useState(0);
   const [usersWilaya, setUsersWilaya] = useState('');
   const [usersLoading, setUsersLoading] = useState(false);
+
+  const ASSOC_PAGE_SIZE = 10;
+  const [assocList, setAssocList]   = useState<any[]>([]);
+  const [assocTotal, setAssocTotal] = useState(0);
+  const [assocPage, setAssocPage]   = useState(1);
+  const [assocLoading, setAssocLoading] = useState(false);
+  const [showCreateAssoc, setShowCreateAssoc] = useState(false);
+  const [deleteAssocTarget, setDeleteAssocTarget] = useState<number | null>(null);
+  const [createForm, setCreateForm] = useState({ nom: '', email: '', mot_de_passe: '', wilaya: '', telephone: '', description: '' });
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   const loadStats = useCallback(async (p: 'tout' | 'semaine' | 'mois') => {
     setStatsLoading(true);
@@ -111,6 +151,39 @@ export default function AdminDashboard() {
     finally { setUsersLoading(false); }
   }, []);
 
+  const loadPoints = useCallback(async (page: number, wilaya = pointsWilaya, statut = pointsStatut, type_dechet = pointsTypeFilter) => {
+    setPointsLoading(true);
+    try {
+      const res = await getPointsAdmin(page, POINTS_PAGE_SIZE, {
+        wilaya: wilaya || undefined,
+        statut: statut || undefined,
+        type_dechet: type_dechet || undefined,
+      });
+      setPointsList(res.data.data.items ?? []);
+      setPointsTotal(res.data.data.total ?? 0);
+    } catch {}
+    finally { setPointsLoading(false); }
+  }, [pointsWilaya, pointsStatut, pointsTypeFilter]);
+
+  const loadResoudre = useCallback(async () => {
+    setResoudreLoading(true);
+    try {
+      const res = await getSignalements(1, 200, 'publie');
+      setResoudreItems(Array.isArray(res.data.data) ? res.data.data : []);
+    } catch {}
+    finally { setResoudreLoading(false); }
+  }, []);
+
+  const loadAssociations = useCallback(async (page: number) => {
+    setAssocLoading(true);
+    try {
+      const res = await getAssociations(page, ASSOC_PAGE_SIZE);
+      setAssocList(res.data.data.items ?? []);
+      setAssocTotal(res.data.data.total ?? 0);
+    } catch {}
+    finally { setAssocLoading(false); }
+  }, []);
+
   useEffect(() => { loadMain(); }, []);
   useEffect(() => {
     if (!periodeInitialized.current) { periodeInitialized.current = true; return; }
@@ -119,6 +192,22 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tab === 'utilisateurs') loadUsers(usersWilaya, usersPage);
   }, [tab, usersWilaya, usersPage]);
+
+  useEffect(() => {
+    if (tab === 'associations') loadAssociations(assocPage);
+  }, [tab, assocPage]);
+
+  useEffect(() => {
+    if (tab === 'points') { setPointsPage(1); loadPoints(1, pointsWilaya, pointsStatut, pointsTypeFilter); }
+  }, [tab, pointsWilaya, pointsStatut, pointsTypeFilter]);
+
+  useEffect(() => {
+    if (tab === 'points' && pointsPage > 1) loadPoints(pointsPage);
+  }, [pointsPage]);
+
+  useEffect(() => {
+    if (tab === 'signalements' && signalMode === 'a_resoudre') loadResoudre();
+  }, [tab, signalMode]);
 
   // Keyboard nav for lightbox
   useEffect(() => {
@@ -179,6 +268,7 @@ export default function AdminDashboard() {
                 style={{ ...s.navItem, ...(tab === t.id ? s.navActive : {}) }}
                 onClick={() => {
                   setTab(t.id);
+                  setSearchParams({ tab: t.id });
                   setWilayaFilter('');
                   setTypeFilter([]);
                   setDegreFilter([]);
@@ -253,6 +343,160 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* ── Associations ── */}
+            {tab === 'associations' && (
+              <div>
+                <div style={s.pageHeader}>
+                  <div>
+                    <h2 style={s.pageTitle}>Associations</h2>
+                    <p style={s.pageSubtitle}>{assocTotal} association{assocTotal !== 1 ? 's' : ''}</p>
+                  </div>
+                  <button style={s.createBtn} onClick={() => { setShowCreateAssoc(true); setCreateError(''); setCreateForm({ nom: '', email: '', mot_de_passe: '', wilaya: '', telephone: '', description: '' }); }}>
+                    + Nouvelle association
+                  </button>
+                </div>
+                {assocLoading ? <Spinner color={Colors.purple} /> : !assocList.length ? (
+                  <EmptyState icon="🏢" message="Aucune association" />
+                ) : (
+                  <>
+                    <div style={s.list}>
+                      {assocList.map((a) => (
+                        <div key={a.id} style={r.card}>
+                          <div style={{ ...r.icon, background: Colors.blue + '18', color: Colors.blue }}>🏢</div>
+                          <div style={r.info}>
+                            <p style={r.title}>{a.nom}</p>
+                            <p style={r.meta}>{a.email}{a.wilaya ? ` · ${a.wilaya}` : ''}</p>
+                            <p style={r.date}>{new Date(a.created_at).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{
+                              borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 700,
+                              background: a.statut === 'validee' ? Colors.primaryLight : a.statut === 'rejetee' ? Colors.redLight : Colors.orangeLight,
+                              color: a.statut === 'validee' ? Colors.primary : a.statut === 'rejetee' ? Colors.red : Colors.orange,
+                            }}>{a.statut}</span>
+                            {a.statut === 'en_attente' && (
+                              <>
+                                <SmallBtn color={Colors.primary} onClick={() => action(() => modererAssociation(a.id, 'validee')).then(() => loadAssociations(assocPage))}>✓</SmallBtn>
+                                <SmallBtn color={Colors.orange} onClick={() => { setRejectTarget(a.id); setRejectMotif(''); }}>✗</SmallBtn>
+                              </>
+                            )}
+                            <SmallBtn color={Colors.red} onClick={() => setDeleteAssocTarget(a.id)}>🗑</SmallBtn>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {assocTotal > ASSOC_PAGE_SIZE && (
+                      <div style={s.pagination}>
+                        <button style={{ ...s.pageBtn, ...(assocPage === 1 ? s.pageBtnDisabled : {}) }}
+                          disabled={assocPage === 1} onClick={() => setAssocPage(p => p - 1)}>← Précédent</button>
+                        <span style={s.pageInfo}>Page <strong>{assocPage}</strong> / {Math.ceil(assocTotal / ASSOC_PAGE_SIZE)}</span>
+                        <button style={{ ...s.pageBtn, ...(assocPage * ASSOC_PAGE_SIZE >= assocTotal ? s.pageBtnDisabled : {}) }}
+                          disabled={assocPage * ASSOC_PAGE_SIZE >= assocTotal} onClick={() => setAssocPage(p => p + 1)}>Suivant →</button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── Points de collecte ── */}
+            {tab === 'points' && (
+              <div>
+                <div style={s.pageHeader}>
+                  <div>
+                    <h2 style={s.pageTitle}>Points de collecte</h2>
+                    <p style={s.pageSubtitle}>{pointsTotal} point{pointsTotal !== 1 ? 's' : ''}</p>
+                  </div>
+                  <button style={s.createBtn} onClick={() => {
+                    setShowCreatePoint(true); setCreatePointError('');
+                    setCreatePointForm({ nom: '', wilaya: '', adresse: '', horaires: '', description: '', latitude: '', longitude: '', type_dechet: [] });
+                  }}>+ Nouveau point</button>
+                </div>
+
+                {/* Filtres */}
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 20, alignItems: 'center' }}>
+                  <div style={s.searchWrap}>
+                    <span style={s.searchIcon}>📍</span>
+                    <select style={s.searchInput} value={pointsWilaya} onChange={e => setPointsWilaya(e.target.value)}>
+                      <option value="">Toutes les wilayas</option>
+                      {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
+                    </select>
+                  </div>
+                  <div style={s.searchWrap}>
+                    <span style={s.searchIcon}>🔘</span>
+                    <select style={s.searchInput} value={pointsStatut} onChange={e => setPointsStatut(e.target.value)}>
+                      <option value="">Tous les statuts</option>
+                      <option value="actif">Actif</option>
+                      <option value="inactif">Inactif</option>
+                    </select>
+                  </div>
+                  <div style={s.searchWrap}>
+                    <span style={s.searchIcon}>♻️</span>
+                    <select style={s.searchInput} value={pointsTypeFilter} onChange={e => setPointsTypeFilter(e.target.value)}>
+                      <option value="">Tous les types</option>
+                      {TYPES_DECHET.map(t => <option key={t.value} value={t.value}>{t.icon} {t.value}</option>)}
+                    </select>
+                  </div>
+                  {(pointsWilaya || pointsStatut || pointsTypeFilter) && (
+                    <button style={s.chipClear} onClick={() => { setPointsWilaya(''); setPointsStatut(''); setPointsTypeFilter(''); }}>
+                      ✕ Effacer les filtres
+                    </button>
+                  )}
+                </div>
+
+                {pointsLoading ? <Spinner color={Colors.primary} /> : !pointsList.length ? (
+                  <EmptyState icon="📍" message="Aucun point de collecte" />
+                ) : (
+                  <>
+                    <div style={s.list}>
+                      {pointsList.map(p => {
+                        const types: string[] = Array.isArray(p.type_dechet) ? p.type_dechet : [];
+                        const isActif = p.statut === 'actif';
+                        return (
+                          <div key={p.id} style={r.card}>
+                            <div style={{ ...r.icon, background: Colors.primary + '18', color: Colors.primary }}>📍</div>
+                            <div style={r.info}>
+                              <p style={r.title}>{p.nom}</p>
+                              <p style={r.meta}>{p.wilaya ? `${p.wilaya} · ` : ''}{types.slice(0, 3).join(', ')}</p>
+                              <p style={r.date}>{new Date(p.created_at).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 700, background: isActif ? Colors.primaryLight : Colors.greyLight, color: isActif ? Colors.primary : Colors.grey }}>
+                                {isActif ? 'Actif' : 'Inactif'}
+                              </span>
+                              <SmallBtn color={isActif ? Colors.orange : Colors.primary}
+                                onClick={() => action(() => modererPointCollecte(p.id, isActif ? 'inactif' : 'actif')).then(() => loadPoints(pointsPage))}>
+                                {isActif ? '⏸' : '▶'}
+                              </SmallBtn>
+                              <SmallBtn color={Colors.purple} onClick={() => {
+                                setEditPointTarget(p);
+                                setEditPointForm({
+                                  nom: p.nom ?? '', wilaya: p.wilaya ?? '', adresse: p.adresse ?? '',
+                                  horaires: p.horaires ?? '', description: p.description ?? '',
+                                  type_dechet: Array.isArray(p.type_dechet) ? [...p.type_dechet] : [],
+                                });
+                                setEditPointError('');
+                              }}>✏️</SmallBtn>
+                              <SmallBtn color={Colors.red} onClick={() => setDeletePointTarget(p.id)}>🗑</SmallBtn>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {pointsTotal > POINTS_PAGE_SIZE && (
+                      <div style={s.pagination}>
+                        <button style={{ ...s.pageBtn, ...(pointsPage === 1 ? s.pageBtnDisabled : {}) }}
+                          disabled={pointsPage === 1} onClick={() => setPointsPage(p => p - 1)}>← Précédent</button>
+                        <span style={s.pageInfo}>Page <strong>{pointsPage}</strong> / {Math.ceil(pointsTotal / POINTS_PAGE_SIZE)}</span>
+                        <button style={{ ...s.pageBtn, ...(pointsPage * POINTS_PAGE_SIZE >= pointsTotal ? s.pageBtnDisabled : {}) }}
+                          disabled={pointsPage * POINTS_PAGE_SIZE >= pointsTotal} onClick={() => setPointsPage(p => p + 1)}>Suivant →</button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             {/* ── Moderation lists ── */}
             {MODERATION_TABS.includes(tab) && (
               <div>
@@ -278,26 +522,35 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Degré de pollution — signalements only */}
+                {/* Mode toggle + filtres — signalements only */}
                 {tab === 'signalements' && (
-                  <div style={s.chipsRow}>
-                    {[1,2,3,4,5].map(d => {
-                      const active = degreFilter.includes(d);
-                      return (
-                        <button
-                          key={d}
-                          style={{ ...s.chip, ...(active ? { borderColor: DEGRE_COLORS[d], background: DEGRE_BG[d], color: DEGRE_COLORS[d] } : {}) }}
-                          onClick={() => toggleDegre(d)}
-                        >
-                          <span style={{ width: 10, height: 10, borderRadius: '50%', background: DEGRE_COLORS[d], display: 'inline-block', flexShrink: 0 }} />
-                          <span>{d} — {DEGRE_LABELS[d]}</span>
-                        </button>
-                      );
-                    })}
-                    {degreFilter.length > 0 && (
-                      <button style={s.chipClear} onClick={() => setDegreFilter([])}>✕ Effacer</button>
-                    )}
-                  </div>
+                  <>
+                    <div style={{ ...s.chipsRow, marginBottom: 8 }}>
+                      {([['moderation', '⏳ En attente de modération'], ['a_resoudre', '🔧 Publiés — à résoudre']] as const).map(([mode, label]) => (
+                        <button key={mode}
+                          style={{ ...s.chip, ...(signalMode === mode ? { borderColor: Colors.purple, background: Colors.purpleLight, color: Colors.purple, fontWeight: 700 } : {}) }}
+                          onClick={() => { setSignalMode(mode); setDegreFilter([]); }}
+                        >{label}</button>
+                      ))}
+                    </div>
+                    <div style={s.chipsRow}>
+                      {[1,2,3,4,5].map(d => {
+                        const active = degreFilter.includes(d);
+                        return (
+                          <button key={d}
+                            style={{ ...s.chip, ...(active ? { borderColor: DEGRE_COLORS[d], background: DEGRE_BG[d], color: DEGRE_COLORS[d] } : {}) }}
+                            onClick={() => toggleDegre(d)}
+                          >
+                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: DEGRE_COLORS[d], display: 'inline-block', flexShrink: 0 }} />
+                            <span>{d} — {DEGRE_LABELS[d]}</span>
+                          </button>
+                        );
+                      })}
+                      {degreFilter.length > 0 && (
+                        <button style={s.chipClear} onClick={() => setDegreFilter([])}>✕ Effacer</button>
+                      )}
+                    </div>
+                  </>
                 )}
 
                 {/* Type déchets chips — points de collecte only */}
@@ -322,53 +575,73 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                {modLoading ? <Spinner color={Colors.purple} /> : !filteredModItems().length ? (
-                  wilayaFilter
-                    ? <EmptyState icon="🔍" message={`Aucun résultat pour « ${wilayaFilter} »`} />
-                    : <EmptyState icon="✅" message="File vide — rien à modérer" />
+                {tab === 'signalements' && signalMode === 'a_resoudre' ? (
+                  resoudreLoading ? <Spinner color={Colors.purple} /> : (() => {
+                    const filtered = resoudreItems.filter(i => {
+                      if (wilayaFilter && i.wilaya !== wilayaFilter) return false;
+                      if (degreFilter.length > 0 && !degreFilter.includes(i.degre_pollution)) return false;
+                      return true;
+                    });
+                    return !filtered.length
+                      ? <EmptyState icon="✅" message="Aucun signalement publié à résoudre" />
+                      : (
+                        <div style={s.list}>
+                          {filtered.map(item => (
+                            <ItemRow key={item.id} item={item} type="signalements"
+                              onDetail={() => setDetail({ item, type: 'signalements' })}
+                              onValidate={() => action(() => modererSignalement(item.id, 'resolu')).then(() => loadResoudre())}
+                              onReject={() => action(() => modererSignalement(item.id, 'rejete')).then(() => loadResoudre())}
+                            />
+                          ))}
+                        </div>
+                      );
+                  })()
                 ) : (
-                  <>
-                    <div style={s.list}>
-                      {filteredModItems().map((item) => (
-                        <ItemRow
-                          key={item.id}
-                          item={item}
-                          type={tab}
-                          onDetail={() => setDetail({ item, type: tab })}
-                          onValidate={() => {
-                            if (tab === 'associations') action(() => modererAssociation(item.id, 'validee'));
-                            if (tab === 'evenements')   action(() => modererEvenementAdmin(item.id, true));
-                            if (tab === 'signalements') action(() => modererSignalement(item.id, 'publie'));
-                            if (tab === 'points')       action(() => modererPointCollecte(item.id, 'actif'));
-                          }}
-                          onReject={() => {
-                            if (tab === 'associations') { setRejectTarget(item.id); setRejectMotif(''); }
-                            else if (tab === 'evenements')   action(() => modererEvenementAdmin(item.id, false));
-                            else if (tab === 'signalements') action(() => modererSignalement(item.id, 'rejete', 'Rejeté par l\'administrateur'));
-                            else if (tab === 'points')       action(() => modererPointCollecte(item.id, 'inactif'));
-                          }}
-                        />
-                      ))}
-                    </div>
-
-                    {modTotal > MOD_PAGE_SIZE && (
-                      <div style={s.pagination}>
-                        <button style={{ ...s.pageBtn, ...(modPage === 1 ? s.pageBtnDisabled : {}) }}
-                          disabled={modPage === 1}
-                          onClick={() => { const p = modPage - 1; setModPage(p); loadModTab(tab, p); }}>
-                          ← Précédent
-                        </button>
-                        <span style={s.pageInfo}>
-                          Page <strong>{modPage}</strong> / {Math.ceil(modTotal / MOD_PAGE_SIZE)}
-                        </span>
-                        <button style={{ ...s.pageBtn, ...(modPage * MOD_PAGE_SIZE >= modTotal ? s.pageBtnDisabled : {}) }}
-                          disabled={modPage * MOD_PAGE_SIZE >= modTotal}
-                          onClick={() => { const p = modPage + 1; setModPage(p); loadModTab(tab, p); }}>
-                          Suivant →
-                        </button>
+                  modLoading ? <Spinner color={Colors.purple} /> : !filteredModItems().length ? (
+                    wilayaFilter
+                      ? <EmptyState icon="🔍" message={`Aucun résultat pour « ${wilayaFilter} »`} />
+                      : <EmptyState icon="✅" message="File vide — rien à modérer" />
+                  ) : (
+                    <>
+                      <div style={s.list}>
+                        {filteredModItems().map((item) => (
+                          <ItemRow
+                            key={item.id}
+                            item={item}
+                            type={tab}
+                            onDetail={() => setDetail({ item, type: tab })}
+                            onValidate={() => {
+                              if (tab === 'evenements')   action(() => modererEvenementAdmin(item.id, true));
+                              if (tab === 'signalements') action(() => modererSignalement(item.id, 'publie'));
+                              if (tab === 'points')       action(() => modererPointCollecte(item.id, 'actif'));
+                            }}
+                            onReject={() => {
+                              if (tab === 'evenements')   action(() => modererEvenementAdmin(item.id, false));
+                              if (tab === 'signalements') action(() => modererSignalement(item.id, 'rejete', 'Rejeté par l\'administrateur'));
+                              if (tab === 'points')       action(() => modererPointCollecte(item.id, 'inactif'));
+                            }}
+                          />
+                        ))}
                       </div>
-                    )}
-                  </>
+                      {modTotal > MOD_PAGE_SIZE && (
+                        <div style={s.pagination}>
+                          <button style={{ ...s.pageBtn, ...(modPage === 1 ? s.pageBtnDisabled : {}) }}
+                            disabled={modPage === 1}
+                            onClick={() => { const p = modPage - 1; setModPage(p); loadModTab(tab, p); }}>
+                            ← Précédent
+                          </button>
+                          <span style={s.pageInfo}>
+                            Page <strong>{modPage}</strong> / {Math.ceil(modTotal / MOD_PAGE_SIZE)}
+                          </span>
+                          <button style={{ ...s.pageBtn, ...(modPage * MOD_PAGE_SIZE >= modTotal ? s.pageBtnDisabled : {}) }}
+                            disabled={modPage * MOD_PAGE_SIZE >= modTotal}
+                            onClick={() => { const p = modPage + 1; setModPage(p); loadModTab(tab, p); }}>
+                            Suivant →
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )
                 )}
               </div>
             )}
@@ -466,23 +739,242 @@ export default function AdminDashboard() {
               )}
             </div>
             <div style={s.panelFooter}>
-              <ActionBtn color={Colors.primary} icon="✓" onClick={() => {
-                if (detail.type === 'associations') action(() => modererAssociation(detail.item.id, 'validee'));
-                if (detail.type === 'evenements')   action(() => modererEvenementAdmin(detail.item.id, true));
-                if (detail.type === 'signalements') action(() => modererSignalement(detail.item.id, 'publie'));
-                if (detail.type === 'points')       action(() => modererPointCollecte(detail.item.id, 'actif'));
-              }}>Valider</ActionBtn>
-              {detail.type === 'signalements' && (
-                <ActionBtn color={Colors.blue} icon="✓" onClick={() => action(() => modererSignalement(detail.item.id, 'resolu'))}>
-                  Résolu
-                </ActionBtn>
+              {detail.type === 'signalements' && signalMode === 'a_resoudre' ? (
+                <>
+                  <ActionBtn color={Colors.primary} icon="✓" onClick={async () => {
+                    await modererSignalement(detail.item.id, 'resolu'); closeDetail(); loadMain(); loadResoudre();
+                  }}>Résolu</ActionBtn>
+                  <ActionBtn color={Colors.red} icon="✗" onClick={async () => {
+                    await modererSignalement(detail.item.id, 'rejete'); closeDetail(); loadMain(); loadResoudre();
+                  }}>Rejeter</ActionBtn>
+                </>
+              ) : (
+                <>
+                  <ActionBtn color={Colors.primary} icon="✓" onClick={() => {
+                    if (detail.type === 'associations') action(() => modererAssociation(detail.item.id, 'validee'));
+                    if (detail.type === 'evenements')   action(() => modererEvenementAdmin(detail.item.id, true));
+                    if (detail.type === 'signalements') action(() => modererSignalement(detail.item.id, 'publie'));
+                    if (detail.type === 'points')       action(() => modererPointCollecte(detail.item.id, 'actif'));
+                  }}>Valider</ActionBtn>
+                  {detail.type === 'signalements' && (
+                    <ActionBtn color={Colors.blue} icon="✓" onClick={() => action(() => modererSignalement(detail.item.id, 'resolu'))}>
+                      Résolu
+                    </ActionBtn>
+                  )}
+                  <ActionBtn color={Colors.red} icon="✗" onClick={() => {
+                    if (detail.type === 'associations') { setRejectTarget(detail.item.id); setRejectMotif(''); closeDetail(); }
+                    else if (detail.type === 'evenements')   action(() => modererEvenementAdmin(detail.item.id, false));
+                    else if (detail.type === 'signalements') action(() => modererSignalement(detail.item.id, 'rejete'));
+                    else if (detail.type === 'points')       action(() => modererPointCollecte(detail.item.id, 'inactif'));
+                  }}>Rejeter</ActionBtn>
+                </>
               )}
-              <ActionBtn color={Colors.red} icon="✗" onClick={() => {
-                if (detail.type === 'associations') { setRejectTarget(detail.item.id); setRejectMotif(''); closeDetail(); }
-                else if (detail.type === 'evenements')   action(() => modererEvenementAdmin(detail.item.id, false));
-                else if (detail.type === 'signalements') action(() => modererSignalement(detail.item.id, 'rejete'));
-                else if (detail.type === 'points')       action(() => modererPointCollecte(detail.item.id, 'inactif'));
-              }}>Rejeter</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create point modal ── */}
+      {showCreatePoint && (
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+          <div style={{ ...s.modal, maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' as const }}>
+            <div style={{ ...s.modalIcon, background: Colors.primaryLight, color: Colors.primary }}>📍</div>
+            <h3 style={s.modalTitle}>Nouveau point de collecte</h3>
+            {createPointError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{createPointError}</p>}
+            <input placeholder="Nom *" value={createPointForm.nom} onChange={e => setCreatePointForm(f => ({ ...f, nom: e.target.value }))} style={s.formInput} />
+            <select value={createPointForm.wilaya} onChange={e => setCreatePointForm(f => ({ ...f, wilaya: e.target.value }))} style={s.formInput}>
+              <option value="">Wilaya *</option>
+              {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
+            </select>
+            <input placeholder="Adresse" value={createPointForm.adresse} onChange={e => setCreatePointForm(f => ({ ...f, adresse: e.target.value }))} style={s.formInput} />
+            <input placeholder="Horaires (ex: Lun-Ven 8h-17h)" value={createPointForm.horaires} onChange={e => setCreatePointForm(f => ({ ...f, horaires: e.target.value }))} style={s.formInput} />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <input placeholder="Latitude *" type="number" step="any" value={createPointForm.latitude} onChange={e => setCreatePointForm(f => ({ ...f, latitude: e.target.value }))} style={{ ...s.formInput, flex: 1 }} />
+              <input placeholder="Longitude *" type="number" step="any" value={createPointForm.longitude} onChange={e => setCreatePointForm(f => ({ ...f, longitude: e.target.value }))} style={{ ...s.formInput, flex: 1 }} />
+            </div>
+            <p style={{ fontSize: 11, color: Colors.grey, marginBottom: 10 }}>Types de déchets *</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {TYPES_DECHET.map(t => {
+                const active = createPointForm.type_dechet.includes(t.value);
+                return (
+                  <button key={t.value} type="button"
+                    style={{ ...s.chip, ...(active ? { borderColor: t.color, background: t.color + '15', color: t.color, fontWeight: 700 } : {}) }}
+                    onClick={() => setCreatePointForm(f => ({
+                      ...f,
+                      type_dechet: active ? f.type_dechet.filter(x => x !== t.value) : [...f.type_dechet, t.value],
+                    }))}>
+                    {t.icon} {t.value}
+                  </button>
+                );
+              })}
+            </div>
+            <textarea placeholder="Description" rows={2} value={createPointForm.description} onChange={e => setCreatePointForm(f => ({ ...f, description: e.target.value }))} style={{ ...s.formInput, height: 60, resize: 'vertical' as const }} />
+            <div style={s.modalRow}>
+              <ActionBtn color={Colors.grey} icon="" onClick={() => setShowCreatePoint(false)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.primary} icon="📍"
+                disabled={createPointLoading || !createPointForm.nom.trim() || !createPointForm.wilaya || !createPointForm.latitude || !createPointForm.longitude || createPointForm.type_dechet.length === 0}
+                onClick={async () => {
+                  setCreatePointLoading(true); setCreatePointError('');
+                  try {
+                    await creerPointCollecte({
+                      nom: createPointForm.nom, wilaya: createPointForm.wilaya,
+                      adresse: createPointForm.adresse || undefined, horaires: createPointForm.horaires || undefined,
+                      description: createPointForm.description || undefined,
+                      latitude: parseFloat(createPointForm.latitude), longitude: parseFloat(createPointForm.longitude),
+                      type_dechet: createPointForm.type_dechet,
+                    });
+                    setShowCreatePoint(false); loadPoints(pointsPage); loadMain();
+                  } catch (e: any) {
+                    setCreatePointError(e?.response?.data?.error ?? 'Erreur lors de la création');
+                  } finally { setCreatePointLoading(false); }
+                }}>
+                {createPointLoading ? 'Création...' : 'Créer'}
+              </ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit point modal ── */}
+      {editPointTarget !== null && (
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+          <div style={{ ...s.modal, maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' as const }}>
+            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}>✏️</div>
+            <h3 style={s.modalTitle}>Modifier le point de collecte</h3>
+            {editPointError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{editPointError}</p>}
+            <input placeholder="Nom" value={editPointForm.nom} onChange={e => setEditPointForm(f => ({ ...f, nom: e.target.value }))} style={s.formInput} />
+            <select value={editPointForm.wilaya} onChange={e => setEditPointForm(f => ({ ...f, wilaya: e.target.value }))} style={s.formInput}>
+              <option value="">Wilaya</option>
+              {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
+            </select>
+            <input placeholder="Adresse" value={editPointForm.adresse} onChange={e => setEditPointForm(f => ({ ...f, adresse: e.target.value }))} style={s.formInput} />
+            <div>
+              <input
+                placeholder="Horaires (ex: 8h-17h)"
+                value={editPointForm.horaires}
+                onChange={e => setEditPointForm(f => ({ ...f, horaires: e.target.value }))}
+                style={{ ...s.formInput, borderColor: editPointForm.horaires && !/^\d{1,2}h-\d{1,2}h$/.test(editPointForm.horaires) ? Colors.red : undefined }}
+              />
+              {editPointForm.horaires && !/^\d{1,2}h-\d{1,2}h$/.test(editPointForm.horaires) && (
+                <p style={{ color: Colors.red, fontSize: 11, marginTop: -8, marginBottom: 10 }}>Format requis : Xh-Yh (ex: 8h-17h)</p>
+              )}
+            </div>
+            <p style={{ fontSize: 11, color: Colors.grey, marginBottom: 10 }}>Types de déchets</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {TYPES_DECHET.map(t => {
+                const active = editPointForm.type_dechet.includes(t.value);
+                return (
+                  <button key={t.value} type="button"
+                    style={{ ...s.chip, ...(active ? { borderColor: t.color, background: t.color + '15', color: t.color, fontWeight: 700 } : {}) }}
+                    onClick={() => setEditPointForm(f => ({
+                      ...f,
+                      type_dechet: active ? f.type_dechet.filter(x => x !== t.value) : [...f.type_dechet, t.value],
+                    }))}>
+                    {t.icon} {t.value}
+                  </button>
+                );
+              })}
+            </div>
+            <textarea placeholder="Description" rows={2} value={editPointForm.description} onChange={e => setEditPointForm(f => ({ ...f, description: e.target.value }))} style={{ ...s.formInput, height: 60, resize: 'vertical' as const }} />
+            <div style={s.modalRow}>
+              <ActionBtn color={Colors.grey} icon="" onClick={() => setEditPointTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.purple} icon="✏️"
+                disabled={editPointLoading || (!!editPointForm.horaires && !/^\d{1,2}h-\d{1,2}h$/.test(editPointForm.horaires))}
+                onClick={async () => {
+                  setEditPointLoading(true); setEditPointError('');
+                  try {
+                    await modifierPointCollecteAdmin(editPointTarget.id, {
+                      nom: editPointForm.nom || undefined,
+                      wilaya: editPointForm.wilaya || undefined,
+                      adresse: editPointForm.adresse || undefined,
+                      horaires: editPointForm.horaires || undefined,
+                      description: editPointForm.description || undefined,
+                      type_dechet: editPointForm.type_dechet.length > 0 ? editPointForm.type_dechet : undefined,
+                    });
+                    setEditPointTarget(null); loadPoints(pointsPage);
+                  } catch (e: any) {
+                    setEditPointError(e?.response?.data?.error ?? 'Erreur lors de la modification');
+                  } finally { setEditPointLoading(false); }
+                }}>
+                {editPointLoading ? 'Enregistrement...' : 'Enregistrer'}
+              </ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete point confirm ── */}
+      {deletePointTarget !== null && (
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+          <div style={{ ...s.modal, maxWidth: 420 }}>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>🗑</div>
+            <h3 style={s.modalTitle}>Supprimer ce point ?</h3>
+            <p style={s.modalDesc}>Cette action est irréversible.</p>
+            <div style={s.modalRow}>
+              <ActionBtn color={Colors.grey} icon="" onClick={() => setDeletePointTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon="🗑" onClick={async () => {
+                await supprimerPointCollecteAdmin(deletePointTarget!);
+                setDeletePointTarget(null); loadPoints(pointsPage); loadMain();
+              }}>Confirmer</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create association modal ── */}
+      {showCreateAssoc && (
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+          <div style={{ ...s.modal, maxWidth: 520 }}>
+            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}>🏢</div>
+            <h3 style={s.modalTitle}>Nouvelle association</h3>
+            {createError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{createError}</p>}
+            <input placeholder="Nom *" value={createForm.nom} onChange={e => setCreateForm(f => ({ ...f, nom: e.target.value }))} style={s.formInput} />
+            <input placeholder="Email *" type="email" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} style={s.formInput} />
+            <input placeholder="Mot de passe * (min 8 car.)" type="password" value={createForm.mot_de_passe} onChange={e => setCreateForm(f => ({ ...f, mot_de_passe: e.target.value }))} style={s.formInput} />
+            <input placeholder="Téléphone" value={createForm.telephone} onChange={e => setCreateForm(f => ({ ...f, telephone: e.target.value }))} style={s.formInput} />
+            <select value={createForm.wilaya} onChange={e => setCreateForm(f => ({ ...f, wilaya: e.target.value }))} style={s.formInput}>
+              <option value="">Wilaya *</option>
+              {WILAYAS.map(w => (
+                <option key={w.id} value={w.nom}>{w.id.toString().padStart(2, '0')} · {w.nom}</option>
+              ))}
+            </select>
+            <textarea placeholder="Description" rows={3} value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))} style={{ ...s.formInput, height: 72, resize: 'vertical' as const }} />
+            <div style={s.modalRow}>
+              <ActionBtn color={Colors.grey} icon="" onClick={() => setShowCreateAssoc(false)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.purple} icon="🏢" disabled={createLoading || !createForm.nom.trim() || !createForm.email.trim() || createForm.mot_de_passe.length < 8 || !createForm.wilaya}
+                onClick={async () => {
+                  setCreateLoading(true); setCreateError('');
+                  try {
+                    await creerAssociationAdmin({ nom: createForm.nom, email: createForm.email, mot_de_passe: createForm.mot_de_passe, wilaya: createForm.wilaya || undefined, telephone: createForm.telephone || undefined, description: createForm.description || undefined });
+                    setShowCreateAssoc(false);
+                    loadAssociations(assocPage);
+                    loadMain();
+                  } catch (e: any) {
+                    setCreateError(e?.response?.data?.error ?? 'Erreur lors de la création');
+                  } finally { setCreateLoading(false); }
+                }}>
+                {createLoading ? 'Création...' : 'Créer'}
+              </ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete association confirm ── */}
+      {deleteAssocTarget !== null && (
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+          <div style={{ ...s.modal, maxWidth: 420 }}>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>🗑</div>
+            <h3 style={s.modalTitle}>Supprimer l'association ?</h3>
+            <p style={s.modalDesc}>Cette action est irréversible. Tous les événements liés seront également supprimés.</p>
+            <div style={s.modalRow}>
+              <ActionBtn color={Colors.grey} icon="" onClick={() => setDeleteAssocTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon="🗑" onClick={async () => {
+                await supprimerAssociation(deleteAssocTarget!);
+                setDeleteAssocTarget(null);
+                loadAssociations(assocPage);
+                loadMain();
+              }}>Confirmer</ActionBtn>
             </div>
           </div>
         </div>
@@ -554,7 +1046,17 @@ export default function AdminDashboard() {
 
 function SignalementDetail({ item, onOpenLightbox }: { item: any; onOpenLightbox: (urls: string[], index: number) => void }) {
   const photos: string[] = Array.isArray(item.photos) ? item.photos : [];
-  const photosResolution: string[] = Array.isArray(item.photos_resolution) ? item.photos_resolution : [];
+  const rawResolution: any[] = Array.isArray(item.photos_resolution) ? item.photos_resolution : [];
+  const photosResolution: string[] = rawResolution.map(r => typeof r === 'string' ? r : r.url);
+
+  const submitters: { utilisateur_id: number; nom: string; prenom: string; count: number }[] = Object.values(
+    rawResolution.filter(r => typeof r !== 'string').reduce((acc: any, r) => {
+      const k = r.utilisateur_id;
+      if (!acc[k]) acc[k] = { utilisateur_id: k, nom: r.nom, prenom: r.prenom, count: 0 };
+      acc[k].count++;
+      return acc;
+    }, {})
+  );
   const deg   = item.degre_pollution ?? 0;
   const color = DEGRE_COLORS[deg] ?? Colors.grey;
   const bg    = DEGRE_BG[deg]    ?? Colors.greyLight;
@@ -614,11 +1116,25 @@ function SignalementDetail({ item, onOpenLightbox }: { item: any; onOpenLightbox
 
       {photosResolution.length > 0 && (
         <Section title={`📷 Photos après nettoyage (${photosResolution.length})`}>
-          <div style={{ background: '#f0fdf4', borderRadius: 10, padding: '10px 12px', marginBottom: 12, borderLeft: `3px solid ${Colors.primary}` }}>
-            <p style={{ fontSize: 13, color: Colors.primary, fontWeight: 600, margin: 0 }}>
-              Des citoyens ont proposé des photos de résolution. Vérifiez avant de marquer comme résolu.
-            </p>
-          </div>
+          {submitters.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <p style={{ fontSize: 11, fontWeight: 800, color: Colors.grey, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                Soumis par
+              </p>
+              {submitters.map(s => (
+                <div key={s.utilisateur_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: Colors.primaryLight, borderRadius: 10, marginBottom: 6 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 16, background: Colors.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: Colors.white, flexShrink: 0 }}>
+                    {(s.prenom[0] ?? '?').toUpperCase()}{(s.nom[0] ?? '').toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: Colors.primaryDark }}>{s.prenom} {s.nom}</p>
+                    <p style={{ fontSize: 11, color: Colors.primary }}>{s.count} photo{s.count > 1 ? 's' : ''} soumise{s.count > 1 ? 's' : ''}</p>
+                  </div>
+                  <span style={{ fontSize: 11, color: Colors.grey }}>#{s.utilisateur_id}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div style={d.photoGrid}>
             {photosResolution.map((url, i) => (
               <div key={i} style={d.photoWrap} onClick={() => onOpenLightbox(photosResolution, i)}>
@@ -920,6 +1436,8 @@ const s: Record<string, React.CSSProperties> = {
   closeBtn:    { background: Colors.greyLight, border: 'none', borderRadius: 8, width: 34, height: 34, cursor: 'pointer', fontSize: 15, color: Colors.grey, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   panelBody:   { flex: 1, overflowY: 'auto' as const, padding: '24px 28px' },
   panelFooter: { padding: '16px 28px', borderTop: `1px solid ${Colors.greyBorder}`, display: 'flex', gap: 10 },
+  createBtn: { background: Colors.purple, color: Colors.white, border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  formInput: { width: '100%', border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 10, padding: '10px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: Colors.white, color: Colors.black },
   modal:     { background: Colors.white, borderRadius: 20, padding: '36px 32px', width: '100%', maxWidth: 460, boxShadow: '0 12px 48px rgba(0,0,0,0.20)' },
   modalIcon: { width: 48, height: 48, borderRadius: 24, background: Colors.redLight, color: Colors.red, fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, fontWeight: 700 },
   modalTitle:{ fontSize: 20, fontWeight: 800, color: Colors.primaryDark, marginBottom: 8 },
