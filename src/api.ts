@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://192.168.1.35:5000/api';
+const BASE_URL = 'http://192.168.1.36:5000/api';
 
 const api = axios.create({ baseURL: BASE_URL, timeout: 10000 });
 
@@ -27,8 +27,18 @@ export const supprimerAssociation = (id: number) =>
   api.delete(`/admin/associations/${id}`);
 export const modererAssociation = (id: number, statut: 'validee' | 'rejetee', motif_rejet?: string) =>
   api.patch(`/admin/associations/${id}`, { statut, motif_rejet });
-export const modererEvenementAdmin = (id: number, valide: boolean) =>
-  api.patch(`/admin/evenements/${id}`, { valide });
+export const getEvenementsAdmin = (page = 1) =>
+  api.get('/admin/evenements', { params: { page, limit: 20 } });
+export const masquerEvenementAdmin = (id: number) =>
+  api.patch(`/admin/evenements/${id}`, { statut: 'annule' });
+export const republierEvenementAdmin = (id: number) =>
+  api.patch(`/admin/evenements/${id}`, { statut: 'publie' });
+export const supprimerEvenementAdmin = (id: number) =>
+  api.delete(`/admin/evenements/${id}`);
+export const getConfigPoints = () =>
+  api.get('/admin/config');
+export const updateConfigPoints = (data: { points_signalement?: number; points_signalement_critique?: number; points_participation?: number }) =>
+  api.patch('/admin/config', data);
 export const modererSignalement = (id: number, statut: 'publie' | 'rejete' | 'resolu', motif_rejet?: string) =>
   api.patch(`/signalements/${id}/statut`, { statut, ...(motif_rejet ? { motif_rejet } : {}) });
 export const rejeterPhotosResolution = (id: number) =>
@@ -39,6 +49,14 @@ export const modererPointCollecte = (id: number, statut: 'actif' | 'inactif') =>
 // Association auth
 export const loginAssociation = (email: string, mot_de_passe: string) =>
   api.post('/auth/association/login', { email, mot_de_passe });
+export const updateProfilAssociation = (fd: FormData) =>
+  api.patch('/associations/profil', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+export const changerMotDePasseAssociation = (mot_de_passe_actuel: string, nouveau_mot_de_passe: string) =>
+  api.patch('/associations/mot-de-passe', { mot_de_passe_actuel, nouveau_mot_de_passe });
+
+export const getProfilAssociation = () =>
+  api.get('/associations/profil');
 
 // Événements
 export const getEvenements = (page = 1, association_id?: number) =>
@@ -47,27 +65,17 @@ export const getEvenements = (page = 1, association_id?: number) =>
 export const getEvenementQRCode = (id: number) =>
   api.get(`/evenements/${id}/qrcode`);
 
-export const creerEvenement = (data: {
-  titre: string;
-  description?: string;
-  date_debut: string;
-  date_fin: string;
-  wilaya?: string;
-  adresse?: string;
-  nb_places_max?: number;
-  points_participation?: number;
-  latitude?: number;
-  longitude?: number;
-}) => api.post('/evenements', data);
+export const creerEvenement = (formData: FormData) =>
+  api.post('/evenements', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
 // Signalements
-export const getSignalements = (page = 1, limit = 100, statut?: string) =>
-  api.get('/signalements', { params: { page, limit, ...(statut ? { statut } : {}) } });
+export const getSignalements = (page = 1, limit = 100, statut?: string, search?: string) =>
+  api.get('/signalements', { params: { page, limit, ...(statut ? { statut } : {}), ...(search ? { search } : {}) } });
 
 // Points de collecte
 export const getPointsCollecte = (page = 1, limit = 100) =>
   api.get('/points-collecte', { params: { page, limit } });
-export const getPointsAdmin = (page = 1, limit = 10, filters: { wilaya?: string; statut?: string; type_dechet?: string } = {}) =>
+export const getPointsAdmin = (page = 1, limit = 10, filters: { wilaya?: string; statut?: string; type_dechet?: string; search?: string } = {}) =>
   api.get('/admin/points-collecte', { params: { page, limit, ...filters } });
 export const creerPointCollecte = (data: {
   nom: string; wilaya: string; type_dechet: string[];
@@ -82,5 +90,42 @@ export const modifierPointCollecteAdmin = (id: number, data: { nom?: string; wil
 // Utilisateurs
 export const getUtilisateurs = (wilaya?: string, page = 1) =>
   api.get('/utilisateurs/classement', { params: { wilaya: wilaya || undefined, page, limit: 50 } });
+export const getUtilisateursAdmin = (page = 1, limit = 20, wilaya?: string, search?: string) =>
+  api.get('/admin/utilisateurs', { params: { page, limit, wilaya: wilaya || undefined, search: search || undefined } });
+export const banUtilisateur = (id: number, actif: boolean) =>
+  api.patch(`/admin/utilisateurs/${id}/ban`, { actif });
+
+// Employés
+export const getEmployes = (page = 1, limit = 20, wilaya?: string, statut?: string) =>
+  api.get('/admin/employes', { params: { page, limit, wilaya: wilaya || undefined, statut: statut || undefined } });
+export const creerEmploye = (data: { nom: string; prenom: string; telephone: string; wilaya?: string }) =>
+  api.post('/admin/employes', data);
+export const modifierEmploye = (id: number, data: Partial<{ nom: string; prenom: string; telephone: string; wilaya: string; statut: string }>) =>
+  api.patch(`/admin/employes/${id}`, data);
+export const supprimerEmploye = (id: number) =>
+  api.delete(`/admin/employes/${id}`);
+
+// Camions
+export const getCamions = (page = 1, limit = 20, wilaya?: string, statut?: string) =>
+  api.get('/admin/camions', { params: { page, limit, wilaya: wilaya || undefined, statut: statut || undefined } });
+export const creerCamion = (data: { immatriculation: string; capacite?: number; wilaya?: string }) =>
+  api.post('/admin/camions', data);
+export const modifierCamion = (id: number, data: Partial<{ immatriculation: string; capacite: number; wilaya: string; statut: string }>) =>
+  api.patch(`/admin/camions/${id}`, data);
+export const supprimerCamion = (id: number) =>
+  api.delete(`/admin/camions/${id}`);
+
+// Collectes
+export const getCollectes = (page = 1, limit = 20, statut?: string) =>
+  api.get('/admin/collectes', { params: { page, limit, statut: statut || undefined } });
+export const creerCollecte = (data: { employe_id: number; camion_id: number; date_prevue: string; creneau?: string; notes?: string; signalement_id?: number }) =>
+  api.post('/admin/collectes', data);
+export const modifierStatutCollecte = (id: number, statut: string) =>
+  api.patch(`/admin/collectes/${id}`, { statut });
+export const supprimerCollecte = (id: number) =>
+  api.delete(`/admin/collectes/${id}`);
+
+export const notifierTop20 = () =>
+  api.post('/admin/notifier-top20');
 
 export default api;

@@ -21,7 +21,8 @@ export default function AssocLogin() {
       localStorage.setItem('assoc', JSON.stringify(res.data.data.association ?? {}));
       navigate('/assoc');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Identifiants incorrects');
+      if (!err.response) setError('Impossible de joindre le serveur. Vérifiez que le backend est démarré.');
+      else setError(err.response.data?.error || err.response.data?.message || 'Identifiants incorrects');
     } finally {
       setLoading(false);
     }

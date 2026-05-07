@@ -393,13 +393,15 @@ export default function AdminMap() {
 function SignalementPopup({ s, onResolu, onPhotosCleared }: { s: any; onResolu: () => void; onPhotosCleared: (id: number) => void }) {
   const [busy, setBusy] = useState<'resolu' | 'rejete' | null>(null);
 
-  const parsePhotos = (val: any): string[] => {
-    if (Array.isArray(val)) return val;
-    if (typeof val === 'string') { try { return JSON.parse(val); } catch { return []; } }
-    return [];
+  const extractUrls = (val: any): string[] => {
+    let arr: any[] = [];
+    if (Array.isArray(val)) arr = val;
+    else if (typeof val === 'string') { try { arr = JSON.parse(val); } catch { return []; } }
+    return arr.map(r => (typeof r === 'string' ? r : r?.url ?? '')).filter(Boolean);
   };
-  const photosAvant = parsePhotos(s.photos);
-  const photosApres = parsePhotos(s.photos_resolution);
+
+  const photosAvant = extractUrls(s.photos);
+  const [photosApres, setPhotosApres] = useState<string[]>(() => extractUrls(s.photos_resolution));
   const color = DEGRE_COLORS[s.degre_pollution] ?? Colors.orange;
 
   const handleResolu = async () => {
@@ -414,7 +416,7 @@ function SignalementPopup({ s, onResolu, onPhotosCleared }: { s: any; onResolu: 
     setBusy('rejete');
     try {
       await rejeterPhotosResolution(s.id);
-      setPhotosApresLocal([]);
+      setPhotosApres([]);
       onPhotosCleared(s.id);
     } catch {}
     setBusy(null);

@@ -20,7 +20,8 @@ export default function AdminLogin() {
       localStorage.setItem('role', 'admin');
       navigate('/admin');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Identifiants incorrects');
+      if (!err.response) setError('Impossible de joindre le serveur. Vérifiez que le backend est démarré.');
+      else setError(err.response.data?.error || err.response.data?.message || 'Identifiants incorrects');
     } finally {
       setLoading(false);
     }
