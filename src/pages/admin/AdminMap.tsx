@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Colors } from '../../constants/colors';
@@ -39,6 +40,24 @@ const DEGRE_LABELS = ['', 'Très léger', 'Léger', 'Modéré', 'Grave', 'Critiq
 const signalIcon = (deg: number) => makeIcon(DEGRE_COLORS[deg] ?? Colors.orange, '⚠');
 const pointIcon  = makeIcon(Colors.primary, '♻');
 const eventIcon  = makeIcon(Colors.purple,  '📅', 32);
+
+// ── Cluster icon factory (couleur selon la couche) ───────────────────────────
+const makeClusterIcon = (color: string) => (cluster: any) => {
+  const count = cluster.getChildCount();
+  const size = count < 10 ? 36 : count < 100 ? 44 : 52;
+  return L.divIcon({
+    className: '',
+    html: `
+      <div style="
+        width:${size}px; height:${size}px; border-radius:50%;
+        background:${color}; border:3px solid white;
+        box-shadow:0 2px 10px rgba(0,0,0,0.4);
+        display:flex; align-items:center; justify-content:center;
+        font-weight:700; color:white; font-size:${size * 0.36}px;
+      ">${count}</div>`,
+    iconSize: [size, size],
+  });
+};
 
 // ── Fit bounds helper ─────────────────────────────────────────────────────────
 function FitBounds({ points }: { points: [number, number][] }) {
@@ -95,8 +114,8 @@ export default function AdminMap() {
 
   useEffect(() => {
     Promise.all([
-      getSignalements(1, 200, 'publie'),
-      getPointsCollecte(1, 200),
+      getSignalements(1, 1000, 'publie'),
+      getPointsCollecte(1, 500),
       getEvenements(1),
     ]).then(([sRes, pRes, eRes]) => {
       setSignalements((sRes.data.data ?? []).filter((s: any) => s.latitude && s.longitude));
@@ -262,30 +281,44 @@ export default function AdminMap() {
           <FlyToWilaya wilaya={wilaya} />
 
           {/* Signalements */}
-          {activeLayers.has('signalements') && filteredS.map(s => (
-            <Marker
-              key={`s-${s.id}`}
-              position={[parseFloat(s.latitude), parseFloat(s.longitude)]}
-              icon={signalIcon(s.degre_pollution)}
+          {activeLayers.has('signalements') && (
+            <MarkerClusterGroup
+              chunkedLoading
+              iconCreateFunction={makeClusterIcon(Colors.orange)}
+              maxClusterRadius={50}
             >
-              <Popup maxWidth={320}>
-                <SignalementPopup
-                  s={s}
-                  onResolu={() => setSignalements(prev => prev.filter(x => x.id !== s.id))}
-                  onPhotosCleared={(id) => setSignalements(prev => prev.map(x => x.id === id ? { ...x, photos_resolution: [] } : x))}
-                />
-              </Popup>
-            </Marker>
-          ))}
+              {filteredS.map(s => (
+                <Marker
+                  key={`s-${s.id}`}
+                  position={[parseFloat(s.latitude), parseFloat(s.longitude)]}
+                  icon={signalIcon(s.degre_pollution)}
+                >
+                  <Popup maxWidth={320}>
+                    <SignalementPopup
+                      s={s}
+                      onResolu={() => setSignalements(prev => prev.filter(x => x.id !== s.id))}
+                      onPhotosCleared={(id) => setSignalements(prev => prev.map(x => x.id === id ? { ...x, photos_resolution: [] } : x))}
+                    />
+                  </Popup>
+                </Marker>
+              ))}
+            </MarkerClusterGroup>
+          )}
 
           {/* Points de collecte */}
-          {activeLayers.has('points') && filteredP.map(p => (
-            <Marker
-              key={`p-${p.id}`}
-              position={[parseFloat(p.latitude), parseFloat(p.longitude)]}
-              icon={pointIcon}
+          {activeLayers.has('points') && (
+            <MarkerClusterGroup
+              chunkedLoading
+              iconCreateFunction={makeClusterIcon(Colors.primary)}
+              maxClusterRadius={50}
             >
-              <Popup maxWidth={300}>
+              {filteredP.map(p => (
+                <Marker
+                  key={`p-${p.id}`}
+                  position={[parseFloat(p.latitude), parseFloat(p.longitude)]}
+                  icon={pointIcon}
+                >
+                  <Popup maxWidth={300}>
                 <div style={mp.popup}>
                   <div style={{ ...mp.header, background: Colors.primary }}>
                     <span style={mp.headerIcon}>♻️</span>
@@ -329,15 +362,23 @@ export default function AdminMap() {
                 </div>
               </Popup>
             </Marker>
-          ))}
+              ))}
+            </MarkerClusterGroup>
+          )}
 
           {/* Événements */}
-          {activeLayers.has('evenements') && filteredE.map(e => (
-            <Marker
-              key={`e-${e.id}`}
-              position={[parseFloat(e.latitude), parseFloat(e.longitude)]}
-              icon={eventIcon}
+          {activeLayers.has('evenements') && (
+            <MarkerClusterGroup
+              chunkedLoading
+              iconCreateFunction={makeClusterIcon(Colors.purple)}
+              maxClusterRadius={50}
             >
+              {filteredE.map(e => (
+                <Marker
+                  key={`e-${e.id}`}
+                  position={[parseFloat(e.latitude), parseFloat(e.longitude)]}
+                  icon={eventIcon}
+                >
               <Popup maxWidth={300}>
                 <div style={mp.popup}>
                   <div style={{ ...mp.header, background: Colors.purple }}>
@@ -381,7 +422,9 @@ export default function AdminMap() {
                 </div>
               </Popup>
             </Marker>
-          ))}
+              ))}
+            </MarkerClusterGroup>
+          )}
         </MapContainer>
       </div>
     </div>
