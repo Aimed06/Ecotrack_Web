@@ -29,37 +29,79 @@ import {
   getEmployes, creerEmploye, modifierEmploye, supprimerEmploye,
   getCamions, creerCamion, modifierCamion, supprimerCamion,
   getCollectes, creerCollecte, modifierStatutCollecte, supprimerCollecte,
-  getConfigPoints, updateConfigPoints, notifierTop20,
+  getConfigPoints, updateConfigPoints, notifierTop20, getSignalementsCritiques,
 } from '../../api';
 import AdminMap from './AdminMap';
 import WILAYAS from '../../constants/wilayas';
 import TYPES_DECHET from '../../constants/typesDechet';
+import {
+  MdSpaceDashboard, MdMap, MdBusiness, MdEvent, MdReportProblem,
+  MdLocationOn, MdPeople, MdEngineering, MdLocalShipping, MdAssignment,
+  MdSettings, MdLogout, MdNotificationsActive, MdVisibility,
+  MdCheck, MdClose, MdDelete, MdEdit, MdAdd, MdSearch,
+  MdBlock, MdWarning, MdCrisisAlert, MdAdminPanelSettings, MdZoomIn,
+  MdFilterList, MdRefresh, MdVerified, MdPersonOff, MdPersonAdd,
+  MdRecycling, MdHandyman, MdHourglassEmpty, MdCameraAlt,
+  MdLocalDrink, MdEco, MdWineBar, MdConstruction, MdDangerous,
+  MdSave, MdEmojiEvents, MdOutlineAddLocationAlt,
+} from 'react-icons/md';
 
 type Tab = 'stats' | 'associations' | 'evenements' | 'signalements' | 'points' | 'utilisateurs' | 'carte' | 'employes' | 'camions' | 'collectes' | 'config';
 interface Stats {
-  nb_citoyens: number; nb_associations: number; nb_signalements: number;
-  nb_evenements_publies: number; nb_participations: number;
+  nb_citoyens: number;
+  nb_associations: number;
+  nb_signalements: number;
+  nb_signalements_en_attente: number;
+  nb_signalements_publies: number;
+  nb_signalements_resolus: number;
+  nb_signalements_critiques: number;
+  nb_evenements_publies: number;
+  nb_participations: number;
+  nb_points_collecte: number;
 }
 interface Queue { associations: any[]; evenements: any[]; signalements: any[]; points_collecte: any[]; }
 
-const TABS: { id: Tab; label: string; icon: string; group?: string }[] = [
-  { id: 'stats',         label: 'Statistiques',      icon: '📊' },
-  { id: 'carte',         label: 'Carte',             icon: '🗺️' },
-  { id: 'associations',  label: 'Associations',       icon: '🏢' },
-  { id: 'evenements',    label: 'Événements',         icon: '📅' },
-  { id: 'signalements',  label: 'Signalements',       icon: '⚠️' },
-  { id: 'points',        label: 'Points de collecte', icon: '📍' },
-  { id: 'utilisateurs',  label: 'Utilisateurs',       icon: '👥' },
-  { id: 'employes',      label: 'Employés',           icon: '👷', group: 'Collecte' },
-  { id: 'camions',       label: 'Camions',            icon: '🚛', group: 'Collecte' },
-  { id: 'collectes',     label: 'Planification',      icon: '📋', group: 'Collecte' },
-  { id: 'config',        label: 'Configuration',      icon: '⚙️', group: 'Paramètres' },
+const TABS: { id: Tab; label: string; group?: string }[] = [
+  { id: 'stats',         label: 'Statistiques' },
+  { id: 'carte',         label: 'Carte' },
+  { id: 'associations',  label: 'Associations' },
+  { id: 'evenements',    label: 'Événements' },
+  { id: 'signalements',  label: 'Signalements' },
+  { id: 'points',        label: 'Points de collecte' },
+  { id: 'utilisateurs',  label: 'Utilisateurs' },
+  { id: 'employes',      label: 'Employés',           group: 'Collecte' },
+  { id: 'camions',       label: 'Camions',            group: 'Collecte' },
+  { id: 'collectes',     label: 'Planification',      group: 'Collecte' },
+  { id: 'config',        label: 'Configuration',      group: 'Paramètres' },
 ];
+
+const TAB_ICONS: Record<Tab, React.ReactNode> = {
+  stats:        <MdSpaceDashboard size={19} />,
+  carte:        <MdMap size={19} />,
+  associations: <MdBusiness size={19} />,
+  evenements:   <MdEvent size={19} />,
+  signalements: <MdReportProblem size={19} />,
+  points:       <MdLocationOn size={19} />,
+  utilisateurs: <MdPeople size={19} />,
+  employes:     <MdEngineering size={19} />,
+  camions:      <MdLocalShipping size={19} />,
+  collectes:    <MdAssignment size={19} />,
+  config:       <MdSettings size={19} />,
+};
 
 const DEGRE_COLORS = ['', '#22c55e', '#84cc16', Colors.orange, '#f97316', Colors.red];
 const DEGRE_BG     = ['', '#f0fdf4', '#f7fee7', Colors.orangeLight, '#fff7ed', Colors.redLight];
 const DEGRE_LABELS = ['', 'Très léger', 'Léger', 'Modéré', 'Grave', 'Critique'];
 const MODERATION_TABS: Tab[] = ['signalements'];
+
+const DECHET_ICONS: Record<string, React.ReactNode> = {
+  'Plastique': <MdLocalDrink size={13} />,
+  'Organique': <MdEco size={13} />,
+  'Verre':     <MdWineBar size={13} />,
+  'Métal':     <MdConstruction size={13} />,
+  'Dangereux': <MdDangerous size={13} />,
+  'Autre':     <MdRecycling size={13} />,
+};
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -69,14 +111,43 @@ export default function AdminDashboard() {
   const [queue, setQueue]     = useState<Queue | null>(null);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail]   = useState<{ item: any; type: Tab } | null>(null);
-  const [rejectMotif, setRejectMotif]   = useState('');
-  const [rejectTarget, setRejectTarget] = useState<number | null>(null);
+  const [rejectMotif, setRejectMotif]         = useState('');
+  const [rejectTarget, setRejectTarget]       = useState<number | null>(null);
+  const [signalRejectTarget, setSignalRejectTarget] = useState<number | null>(null);
+  const [rejectPointTarget, setRejectPointTarget] = useState<any | null>(null);
   const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
 
   type Periode = 'tout' | 'semaine' | 'mois';
   const [periode, setPeriode] = useState<Periode>('tout');
   const [statsLoading, setStatsLoading] = useState(false);
   const periodeInitialized = useRef(false);
+
+  const [newCritiques, setNewCritiques] = useState<any[]>([]);
+  const lastCritiqueCheckRef = useRef<string>(new Date().toISOString());
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+    const poll = async () => {
+      try {
+        const res = await getSignalementsCritiques(lastCritiqueCheckRef.current);
+        const found: any[] = res.data.data ?? [];
+        if (found.length > 0) {
+          lastCritiqueCheckRef.current = new Date().toISOString();
+          setNewCritiques(prev => [...found, ...prev]);
+          if ('Notification' in window && Notification.permission === 'granted') {
+            found.forEach(s => new Notification(`🚨 Signalement critique — ${s.wilaya ?? ''}`, {
+              body: `${s.titre}  ·  Degré ${s.degre_pollution}/5`,
+              icon: '/favicon.png',
+            }));
+          }
+        }
+      } catch {}
+    };
+    const id = setInterval(poll, 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const [wilayaFilter, setWilayaFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState<string[]>([]);
@@ -90,13 +161,22 @@ export default function AdminDashboard() {
   const [showCreatePoint, setShowCreatePoint] = useState(false);
   const [deletePointTarget, setDeletePointTarget] = useState<number | null>(null);
   const [editPointTarget, setEditPointTarget] = useState<any | null>(null);
-  const [editPointForm, setEditPointForm] = useState({ nom: '', wilaya: '', adresse: '', horaires: '', description: '', type_dechet: [] as string[] });
+  const [editPointForm, setEditPointForm] = useState({ nom: '', wilaya: '', adresse: '', horaires: '', type_dechet: [] as string[] });
   const [editPointLoading, setEditPointLoading] = useState(false);
   const [editPointError, setEditPointError] = useState('');
   const [createPointForm, setCreatePointForm] = useState({
-    nom: '', wilaya: '', adresse: '', horaires: '', description: '',
+    nom: '', wilaya: '', adresse: '', horaires: '',
     latitude: '', longitude: '', type_dechet: [] as string[],
   });
+  const [propositionsList, setPropositionsList] = useState<any[]>([]);
+  const [propositionsTotal, setPropositionsTotal] = useState(0);
+  const [propositionsLoading, setPropositionsLoading] = useState(false);
+  const [pointsSubTab, setPointsSubTab] = useState<'propositions' | 'actifs'>('propositions');
+  const [acceptTarget, setAcceptTarget] = useState<any | null>(null);
+  const [acceptNom, setAcceptNom] = useState('');
+  const [acceptHoraires, setAcceptHoraires] = useState('');
+  const [acceptHorairesBuilder, setAcceptHorairesBuilder] = useState<{ jours: string[]; ouverture: string; fermeture: string }>({ jours: [], ouverture: '08:00', fermeture: '17:00' });
+  const [acceptLoading, setAcceptLoading] = useState(false);
   const [createPointLoading, setCreatePointLoading] = useState(false);
   const [createPointError, setCreatePointError] = useState('');
   const [createPointMapOpen, setCreatePointMapOpen] = useState(false);
@@ -129,7 +209,7 @@ export default function AdminDashboard() {
   };
 
   // ── Config state
-  const [configData, setConfigData] = useState({ points_signalement: 20, points_signalement_critique: 30, points_participation: 50 });
+  const [configData, setConfigData] = useState({ points_signalement: 20, points_signalement_critique: 30, points_participation: 50, points_proposition_point: 30 });
   const [configSaving, setConfigSaving] = useState(false);
   const [configMsg, setConfigMsg]   = useState('');
   const [configErr, setConfigErr]   = useState('');
@@ -347,6 +427,16 @@ export default function AdminDashboard() {
     finally { setPointsLoading(false); }
   }, [pointsWilaya, pointsStatut, pointsTypeFilter]);
 
+  const loadPropositions = useCallback(async () => {
+    setPropositionsLoading(true);
+    try {
+      const res = await getPointsAdmin(1, 50, { statut: 'en_attente' });
+      setPropositionsList(res.data.data.items ?? []);
+      setPropositionsTotal(res.data.data.total ?? 0);
+    } catch {}
+    finally { setPropositionsLoading(false); }
+  }, []);
+
   const loadResoudre = useCallback(async (search = signalSearch) => {
     setResoudreLoading(true);
     try {
@@ -413,7 +503,7 @@ export default function AdminDashboard() {
   }, [tab, assocPage]);
 
   useEffect(() => {
-    if (tab === 'points') { setPointsPage(1); loadPoints(1, pointsWilaya, pointsStatut, pointsTypeFilter, pointsSearch); }
+    if (tab === 'points') { setPointsPage(1); loadPoints(1, pointsWilaya, pointsStatut, pointsTypeFilter, pointsSearch); loadPropositions(); }
   }, [tab, pointsWilaya, pointsStatut, pointsTypeFilter, pointsSearch]);
 
   useEffect(() => {
@@ -469,7 +559,6 @@ export default function AdminDashboard() {
     associations: queue?.associations.length ?? 0,
     evenements:   queue?.evenements.length ?? 0,
     signalements: queue?.signalements.length ?? 0,
-    points:       queue?.points_collecte.length ?? 0,
   };
   const totalPending = Object.values(pendingCounts).reduce((a, b) => a + b, 0);
 
@@ -488,8 +577,14 @@ export default function AdminDashboard() {
       {/* ── Sidebar ── */}
       <aside style={s.sidebar}>
         <div style={s.sideTop}>
-          <div style={s.logo}>🌿 EcoTrack</div>
-          <div style={s.roleTag}>Administrateur</div>
+          <div style={s.logo}>
+            <span style={{ fontSize: 22 }}>🌿</span>
+            <span>EcoTrack</span>
+          </div>
+          <div style={s.roleTag}>
+            <MdAdminPanelSettings size={13} />
+            Administrateur
+          </div>
         </div>
         <nav style={s.nav}>
           {TABS.map((t, i) => {
@@ -499,8 +594,8 @@ export default function AdminDashboard() {
             return (
               <div key={t.id}>
                 {showSeparator && (
-                  <div style={{ padding: '10px 16px 4px', fontSize: 10, fontWeight: 800, color: Colors.grey, textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
-                    {t.group === 'Collecte' ? '🚛' : '⚙️'} {t.group}
+                  <div style={{ padding: '14px 16px 4px', fontSize: 10, fontWeight: 800, color: Colors.grey, textTransform: 'uppercase' as const, letterSpacing: '0.10em' }}>
+                    {t.group}
                   </div>
                 )}
                 <button
@@ -516,7 +611,7 @@ export default function AdminDashboard() {
                     if (t.id === 'config') loadConfig();
                   }}
                 >
-                  <span style={s.navIcon}>{t.icon}</span>
+                  <span style={s.navIcon}>{TAB_ICONS[t.id]}</span>
                   <span style={{ flex: 1 }}>{t.label}</span>
                   {n > 0 && <span style={s.badge}>{n}</span>}
                 </button>
@@ -527,18 +622,37 @@ export default function AdminDashboard() {
         <div style={s.sideBottom}>
           {totalPending > 0 && (
             <div style={s.pendingAlert}>
-              <span>🔔</span>
+              <MdNotificationsActive size={15} />
               <span>{totalPending} en attente</span>
             </div>
           )}
           <button style={s.logoutBtn} onClick={logout}>
-            <span>🚪</span> Déconnexion
+            <MdLogout size={15} /> Déconnexion
           </button>
         </div>
       </aside>
 
       {/* ── Main ── */}
       <main style={s.main}>
+        {newCritiques.length > 0 && (
+          <div style={s.critiqueBanner}>
+            <MdCrisisAlert size={22} />
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
+              {newCritiques.length} nouveau{newCritiques.length > 1 ? 'x' : ''} signalement{newCritiques.length > 1 ? 's' : ''} critique{newCritiques.length > 1 ? 's' : ''} en attente de modération
+            </span>
+            <button
+              onClick={() => {
+                setTab('signalements');
+                setSearchParams({ tab: 'signalements' });
+                setSignalMode('moderation');
+                if (newCritiques.length > 0) setDetail({ item: newCritiques[0], type: 'signalements' });
+                setNewCritiques([]);
+              }}
+              style={s.critiqueBtn}
+            >Voir</button>
+            <button onClick={() => setNewCritiques([])} style={s.critiqueDismiss}><MdClose size={16} /></button>
+          </div>
+        )}
         {loading ? <Spinner color={Colors.purple} /> : (
           <>
             {/* ── Carte ── */}
@@ -573,14 +687,28 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 {statsLoading ? <Spinner color={Colors.purple} /> : (
-                  <div style={s.statsGrid}>
-                    <StatCard icon="👥" label={periode === 'tout' ? 'Citoyens inscrits' : 'Nouveaux citoyens'} value={stats.nb_citoyens} color={Colors.blue} bg={Colors.blueLight} />
-                    <StatCard icon="🏢" label={periode === 'tout' ? 'Associations validées' : 'Nouvelles associations'} value={stats.nb_associations} color={Colors.primary} bg={Colors.primaryLight} />
-                    <StatCard icon="⚠️" label={periode === 'tout' ? 'Signalements totaux' : 'Nouveaux signalements'} value={stats.nb_signalements} color={Colors.orange} bg={Colors.orangeLight} />
-                    <StatCard icon="📅" label={periode === 'tout' ? 'Événements publiés' : 'Nouveaux événements'} value={stats.nb_evenements_publies} color={Colors.purple} bg={Colors.purpleLight} />
-                    <StatCard icon="✅" label={periode === 'tout' ? 'Participations validées' : 'Nouvelles participations'} value={stats.nb_participations} color={Colors.primaryMedium} bg={Colors.greenLight} />
-                    <StatCard icon="🔔" label="En attente (total)" value={totalPending} color={Colors.red} bg={Colors.redLight} />
-                  </div>
+                  <>
+                    <div style={s.statsGrid}>
+                      <StatCard icon={<MdPeople size={22} />} label={periode === 'tout' ? 'Citoyens inscrits' : 'Nouveaux citoyens'} value={stats.nb_citoyens} color={Colors.blue} bg={Colors.blueLight} />
+                      <StatCard icon={<MdBusiness size={22} />} label={periode === 'tout' ? 'Associations validées' : 'Nouvelles associations'} value={stats.nb_associations} color={Colors.primary} bg={Colors.primaryLight} />
+                      <StatCard icon={<MdEvent size={22} />} label={periode === 'tout' ? 'Événements publiés' : 'Nouveaux événements'} value={stats.nb_evenements_publies} color={Colors.purple} bg={Colors.purpleLight} />
+                      <StatCard icon={<MdVerified size={22} />} label={periode === 'tout' ? 'Participations validées' : 'Nouvelles participations'} value={stats.nb_participations} color={Colors.primaryMedium} bg={Colors.greenLight} />
+                      <StatCard icon={<MdLocationOn size={22} />} label={periode === 'tout' ? 'Points de collecte actifs' : 'Nouveaux points actifs'} value={stats.nb_points_collecte} color={Colors.primary} bg={Colors.primaryLight} />
+                      <StatCard icon={<MdNotificationsActive size={22} />} label="En attente (modération)" value={totalPending} color={Colors.red} bg={Colors.redLight} />
+                    </div>
+                    <div style={{ marginTop: 24 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: Colors.primaryDark, marginBottom: 14 }}>
+                        Signalements — {periode === 'tout' ? 'total' : periode === 'semaine' ? 'semaine en cours' : 'mois en cours'}
+                      </p>
+                      <div style={s.statsGrid}>
+                        <StatCard icon={<MdReportProblem size={22} />} label="Total" value={stats.nb_signalements} color={Colors.orange} bg={Colors.orangeLight} />
+                        <StatCard icon={<MdAssignment size={22} />} label="En attente" value={stats.nb_signalements_en_attente} color={Colors.orange} bg={Colors.orangeLight} />
+                        <StatCard icon={<MdVerified size={22} />} label="Publiés" value={stats.nb_signalements_publies} color={Colors.primary} bg={Colors.primaryLight} />
+                        <StatCard icon={<MdCheck size={22} />} label="Résolus" value={stats.nb_signalements_resolus} color={Colors.primaryMedium} bg={Colors.greenLight} />
+                        <StatCard icon={<MdCrisisAlert size={22} />} label="Critiques (≥4)" value={stats.nb_signalements_critiques} color={Colors.red} bg={Colors.redLight} />
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -595,13 +723,13 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 {assocLoading ? <Spinner color={Colors.purple} /> : !assocList.length ? (
-                  <EmptyState icon="🏢" message="Aucune association" />
+                  <EmptyState icon={<MdBusiness size={16} />} message="Aucune association" />
                 ) : (
                   <>
                     <div style={s.list}>
                       {assocList.map((a) => (
                         <div key={a.id} style={r.card}>
-                          <div style={{ ...r.icon, background: Colors.blue + '18', color: Colors.blue }}>🏢</div>
+                          <div style={{ ...r.icon, background: Colors.blue + '18', color: Colors.blue }}><MdBusiness size={20} /></div>
                           <div style={r.info}>
                             <p style={r.title}>{a.nom}</p>
                             <p style={r.meta}>{a.email}{a.wilaya ? ` · ${a.wilaya}` : ''}</p>
@@ -613,14 +741,14 @@ export default function AdminDashboard() {
                               background: a.statut === 'validee' ? Colors.primaryLight : a.statut === 'rejetee' ? Colors.redLight : Colors.orangeLight,
                               color: a.statut === 'validee' ? Colors.primary : a.statut === 'rejetee' ? Colors.red : Colors.orange,
                             }}>{a.statut === 'en_attente' ? 'En attente' : a.statut === 'validee' ? 'Validée' : 'Rejetée'}</span>
-                            <SmallBtn color={Colors.blue} onClick={() => setDetail({ item: a, type: 'associations' })}>👁</SmallBtn>
+                            <SmallBtn color={Colors.blue} onClick={() => setDetail({ item: a, type: 'associations' })}><MdVisibility size={16} /></SmallBtn>
                             {a.statut === 'en_attente' && (
                               <>
-                                <SmallBtn color={Colors.primary} onClick={() => action(() => modererAssociation(a.id, 'validee')).then(() => loadAssociations(assocPage))}>✓</SmallBtn>
-                                <SmallBtn color={Colors.orange} onClick={() => { setRejectTarget(a.id); setRejectMotif(''); }}>✗</SmallBtn>
+                                <SmallBtn color={Colors.primary} onClick={() => action(() => modererAssociation(a.id, 'validee')).then(() => loadAssociations(assocPage))}><MdCheck size={16} /></SmallBtn>
+                                <SmallBtn color={Colors.orange} onClick={() => { setRejectTarget(a.id); setRejectMotif(''); }}><MdClose size={16} /></SmallBtn>
                               </>
                             )}
-                            <SmallBtn color={Colors.red} onClick={() => setDeleteAssocTarget(a.id)}>🗑</SmallBtn>
+                            <SmallBtn color={Colors.red} onClick={() => setDeleteAssocTarget(a.id)}><MdDelete size={16} /></SmallBtn>
                           </div>
                         </div>
                       ))}
@@ -637,91 +765,151 @@ export default function AdminDashboard() {
                 <div style={s.pageHeader}>
                   <div>
                     <h2 style={s.pageTitle}>Points de collecte</h2>
-                    <p style={s.pageSubtitle}>{pointsTotal} point{pointsTotal !== 1 ? 's' : ''}</p>
+                    <p style={s.pageSubtitle}>
+                      {propositionsTotal > 0 && <span style={{ color: Colors.orange, fontWeight: 700 }}>{propositionsTotal} proposition{propositionsTotal !== 1 ? 's' : ''} en attente · </span>}
+                      {pointsTotal} point{pointsTotal !== 1 ? 's' : ''} actifs/inactifs
+                    </p>
                   </div>
-                  <button style={s.createBtn} onClick={() => {
-                    setShowCreatePoint(true); setCreatePointError(''); setHorairesBuilder({ jours: [], ouverture: '08:00', fermeture: '17:00' }); setCreatePointForm({ nom: '', wilaya: '', adresse: '', horaires: '', description: '', latitude: '', longitude: '', type_dechet: [] });
-                    setCreatePointForm({ nom: '', wilaya: '', adresse: '', horaires: '', description: '', latitude: '', longitude: '', type_dechet: [] });
-                  }}>+ Nouveau point</button>
-                </div>
-
-                {/* Filtres */}
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 20, alignItems: 'center' }}>
-                  <div style={{ ...s.searchWrap, minWidth: 220 }}>
-                    <span style={s.searchIcon}>🔍</span>
-                    <input style={s.searchInput} placeholder="Rechercher nom, adresse..." value={pointsSearch} onChange={e => setPointsSearch(e.target.value)} />
-                    {pointsSearch && <button onClick={() => setPointsSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: Colors.grey, fontSize: 14, padding: '0 4px' }}>✕</button>}
-                  </div>
-                  <div style={s.searchWrap}>
-                    <span style={s.searchIcon}>📍</span>
-                    <select style={s.searchInput} value={pointsWilaya} onChange={e => setPointsWilaya(e.target.value)}>
-                      <option value="">Toutes les wilayas</option>
-                      {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
-                    </select>
-                  </div>
-                  <div style={s.searchWrap}>
-                    <span style={s.searchIcon}>🔘</span>
-                    <select style={s.searchInput} value={pointsStatut} onChange={e => setPointsStatut(e.target.value)}>
-                      <option value="">Tous les statuts</option>
-                      <option value="actif">Actif</option>
-                      <option value="inactif">Inactif</option>
-                    </select>
-                  </div>
-                  <div style={s.searchWrap}>
-                    <span style={s.searchIcon}>♻️</span>
-                    <select style={s.searchInput} value={pointsTypeFilter} onChange={e => setPointsTypeFilter(e.target.value)}>
-                      <option value="">Tous les types</option>
-                      {TYPES_DECHET.map(t => <option key={t.value} value={t.value}>{t.icon} {t.value}</option>)}
-                    </select>
-                  </div>
-                  {(pointsWilaya || pointsStatut || pointsTypeFilter) && (
-                    <button style={s.chipClear} onClick={() => { setPointsWilaya(''); setPointsStatut(''); setPointsTypeFilter(''); }}>
-                      ✕ Effacer les filtres
-                    </button>
+                  {pointsSubTab === 'actifs' && (
+                    <button style={s.createBtn} onClick={() => {
+                      setShowCreatePoint(true); setCreatePointError('');
+                      setHorairesBuilder({ jours: [], ouverture: '08:00', fermeture: '17:00' });
+                      setCreatePointForm({ nom: '', wilaya: '', adresse: '', horaires: '', latitude: '', longitude: '', type_dechet: [] });
+                    }}><MdAdd size={18} /> Nouveau point</button>
                   )}
                 </div>
 
-                {pointsLoading ? <Spinner color={Colors.primary} /> : !pointsList.length ? (
-                  <EmptyState icon="📍" message="Aucun point de collecte" />
-                ) : (
-                  <>
+                {/* Sub-tabs */}
+                <div style={{ display: 'flex', borderBottom: `2px solid ${Colors.greyBorder}`, marginBottom: 24 }}>
+                  {([
+                    { id: 'propositions' as const, label: `Propositions citoyens${propositionsTotal > 0 ? ` (${propositionsTotal})` : ''}` },
+                    { id: 'actifs' as const, label: 'Gestion des points de collecte' },
+                  ]).map(st => (
+                    <button key={st.id} onClick={() => setPointsSubTab(st.id)} style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      padding: '10px 22px', fontSize: 14, fontWeight: 700,
+                      color: pointsSubTab === st.id ? Colors.primary : Colors.grey,
+                      borderBottom: pointsSubTab === st.id ? `2px solid ${Colors.primary}` : '2px solid transparent',
+                      marginBottom: -2,
+                    }}>{st.label}</button>
+                  ))}
+                </div>
+
+                {/* Propositions sub-tab */}
+                {pointsSubTab === 'propositions' && (
+                  propositionsLoading ? <Spinner color={Colors.primary} /> :
+                  !propositionsList.length ? (
+                    <EmptyState icon={<MdLocationOn size={56} />} message="Aucune proposition en attente" />
+                  ) : (
                     <div style={s.list}>
-                      {pointsList.map(p => {
+                      {propositionsList.map(p => {
                         const types: string[] = Array.isArray(p.type_dechet) ? p.type_dechet : [];
-                        const isActif = p.statut === 'actif';
                         return (
                           <div key={p.id} style={r.card}>
-                            <div style={{ ...r.icon, background: Colors.primary + '18', color: Colors.primary }}>📍</div>
+                            <div style={{ ...r.icon, background: Colors.orangeLight, color: Colors.orange }}><MdLocationOn size={20} /></div>
                             <div style={r.info}>
-                              <p style={r.title}>{p.nom}</p>
-                              <p style={r.meta}>{p.wilaya ? `${p.wilaya} · ` : ''}{types.slice(0, 3).join(', ')}</p>
+                              <p style={r.title}>{p.wilaya ?? 'Wilaya non précisée'}{p.adresse ? ` · ${p.adresse}` : ''}</p>
+                              <p style={r.meta}>{types.join(', ')}</p>
+                              {p.note_citoyen && <p style={{ ...r.meta, fontStyle: 'italic', marginTop: 2, color: Colors.grey }}>"{p.note_citoyen}"</p>}
                               <p style={r.date}>{new Date(p.created_at).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 700, background: isActif ? Colors.primaryLight : Colors.greyLight, color: isActif ? Colors.primary : Colors.grey }}>
-                                {isActif ? 'Actif' : 'Inactif'}
-                              </span>
-                              <SmallBtn color={isActif ? Colors.orange : Colors.primary}
-                                onClick={() => action(() => modererPointCollecte(p.id, isActif ? 'inactif' : 'actif')).then(() => loadPoints(pointsPage))}>
-                                {isActif ? '⏸' : '▶'}
-                              </SmallBtn>
-                              <SmallBtn color={Colors.purple} onClick={() => {
-                                setEditPointTarget(p);
-                                setEditPointForm({
-                                  nom: p.nom ?? '', wilaya: p.wilaya ?? '', adresse: p.adresse ?? '',
-                                  horaires: p.horaires ?? '', description: p.description ?? '',
-                                  type_dechet: Array.isArray(p.type_dechet) ? [...p.type_dechet] : [],
-                                });
-                                setEditHorairesBuilder(parseHoraires(p.horaires ?? ''));
-                                setEditPointError('');
-                              }}>✏️</SmallBtn>
-                              <SmallBtn color={Colors.red} onClick={() => setDeletePointTarget(p.id)}>🗑</SmallBtn>
+                            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                              <button
+                                style={{ background: Colors.primary, color: Colors.white, border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                                onClick={() => { setAcceptTarget(p); setAcceptNom(''); setAcceptHoraires(''); setAcceptHorairesBuilder({ jours: [], ouverture: '08:00', fermeture: '17:00' }); }}
+                              ><MdCheck size={15} /> Accepter</button>
+                              <button
+                                style={{ background: 'none', color: Colors.red, border: `1.5px solid ${Colors.red}`, borderRadius: 8, padding: '7px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                                onClick={() => setRejectPointTarget(p)}
+                              ><MdClose size={15} /> Rejeter</button>
                             </div>
                           </div>
                         );
                       })}
                     </div>
-                    <Paginator page={pointsPage} total={pointsTotal} pageSize={POINTS_PAGE_SIZE} onChange={setPointsPage} />
+                  )
+                )}
+
+                {/* Gestion sub-tab */}
+                {pointsSubTab === 'actifs' && (
+                  <>
+                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 20, alignItems: 'center' }}>
+                      <div style={{ ...s.searchWrap, minWidth: 220 }}>
+                        <span style={s.searchIcon}><MdSearch size={16} /></span>
+                        <input style={s.searchInput} placeholder="Rechercher nom, adresse..." value={pointsSearch} onChange={e => setPointsSearch(e.target.value)} />
+                        {pointsSearch && <button onClick={() => setPointsSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: Colors.grey, display: 'flex', alignItems: 'center' }}><MdClose size={15} /></button>}
+                      </div>
+                      <div style={s.searchWrap}>
+                        <span style={s.searchIcon}><MdLocationOn size={16} /></span>
+                        <select style={s.searchInput} value={pointsWilaya} onChange={e => setPointsWilaya(e.target.value)}>
+                          <option value="">Toutes les wilayas</option>
+                          {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
+                        </select>
+                      </div>
+                      <div style={s.searchWrap}>
+                        <span style={s.searchIcon}><MdFilterList size={16} /></span>
+                        <select style={s.searchInput} value={pointsStatut} onChange={e => setPointsStatut(e.target.value)}>
+                          <option value="">Tous les statuts</option>
+                          <option value="actif">Actif</option>
+                          <option value="inactif">Inactif</option>
+                        </select>
+                      </div>
+                      <div style={s.searchWrap}>
+                        <span style={s.searchIcon}><MdRecycling size={16} /></span>
+                        <select style={s.searchInput} value={pointsTypeFilter} onChange={e => setPointsTypeFilter(e.target.value)}>
+                          <option value="">Tous les types</option>
+                          {TYPES_DECHET.map(t => <option key={t.value} value={t.value}>{t.icon} {t.value}</option>)}
+                        </select>
+                      </div>
+                      {(pointsWilaya || pointsStatut || pointsTypeFilter) && (
+                        <button style={s.chipClear} onClick={() => { setPointsWilaya(''); setPointsStatut(''); setPointsTypeFilter(''); }}>
+                          ✕ Effacer les filtres
+                        </button>
+                      )}
+                    </div>
+                    {pointsLoading ? <Spinner color={Colors.primary} /> : !pointsList.length ? (
+                      <EmptyState icon={<MdLocationOn size={56} />} message="Aucun point de collecte" />
+                    ) : (
+                      <>
+                        <div style={s.list}>
+                          {pointsList.map(p => {
+                            const types: string[] = Array.isArray(p.type_dechet) ? p.type_dechet : [];
+                            const isActif = p.statut === 'actif';
+                            return (
+                              <div key={p.id} style={r.card}>
+                                <div style={{ ...r.icon, background: Colors.primary + '18', color: Colors.primary }}><MdLocationOn size={20} /></div>
+                                <div style={r.info}>
+                                  <p style={r.title}>{p.nom}</p>
+                                  <p style={r.meta}>{p.wilaya ? `${p.wilaya} · ` : ''}{types.slice(0, 3).join(', ')}</p>
+                                  <p style={r.date}>{new Date(p.created_at).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 700, background: isActif ? Colors.primaryLight : Colors.greyLight, color: isActif ? Colors.primary : Colors.grey }}>
+                                    {isActif ? 'Actif' : 'Inactif'}
+                                  </span>
+                                  <SmallBtn color={isActif ? Colors.orange : Colors.primary}
+                                    onClick={() => action(() => modererPointCollecte(p.id, isActif ? 'inactif' : 'actif')).then(() => loadPoints(pointsPage))}>
+                                    {isActif ? <MdWarning size={15} /> : <MdCheck size={15} />}
+                                  </SmallBtn>
+                                  <SmallBtn color={Colors.purple} onClick={() => {
+                                    setEditPointTarget(p);
+                                    setEditPointForm({
+                                      nom: p.nom ?? '', wilaya: p.wilaya ?? '', adresse: p.adresse ?? '',
+                                      horaires: p.horaires ?? '',
+                                      type_dechet: Array.isArray(p.type_dechet) ? [...p.type_dechet] : [],
+                                    });
+                                    setEditHorairesBuilder(parseHoraires(p.horaires ?? ''));
+                                    setEditPointError('');
+                                  }}><MdEdit size={16} /></SmallBtn>
+                                  <SmallBtn color={Colors.red} onClick={() => setDeletePointTarget(p.id)}><MdDelete size={16} /></SmallBtn>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <Paginator page={pointsPage} total={pointsTotal} pageSize={POINTS_PAGE_SIZE} onChange={setPointsPage} />
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -740,13 +928,13 @@ export default function AdminDashboard() {
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const, alignItems: 'center' }}>
                     {tab === 'signalements' && (
                       <div style={{ ...s.searchWrap, minWidth: 220 }}>
-                        <span style={s.searchIcon}>🔍</span>
+                        <span style={s.searchIcon}><MdSearch size={16} /></span>
                         <input style={s.searchInput} placeholder="Rechercher titre, description..." value={signalSearch} onChange={e => setSignalSearch(e.target.value)} />
                         {signalSearch && <button onClick={() => setSignalSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: Colors.grey, fontSize: 14, padding: '0 4px' }}>✕</button>}
                       </div>
                     )}
                     <div style={s.searchWrap}>
-                      <span style={s.searchIcon}>📍</span>
+                      <span style={s.searchIcon}><MdLocationOn size={16} /></span>
                       <select style={s.searchInput} value={wilayaFilter} onChange={(e) => setWilayaFilter(e.target.value)}>
                         <option value=''>Toutes les wilayas</option>
                         {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
@@ -759,11 +947,14 @@ export default function AdminDashboard() {
                 {tab === 'signalements' && (
                   <>
                     <div style={{ ...s.chipsRow, marginBottom: 8 }}>
-                      {([['moderation', '⏳ En attente de modération'], ['a_resoudre', '🔧 Publiés — à résoudre']] as const).map(([mode, label]) => (
+                      {([
+                        ['moderation',  <MdHourglassEmpty size={14} />, 'En attente de modération'],
+                        ['a_resoudre',  <MdHandyman size={14} />,       'Publiés — à résoudre'],
+                      ] as const).map(([mode, icon, label]) => (
                         <button key={mode}
                           style={{ ...s.chip, ...(signalMode === mode ? { borderColor: Colors.purple, background: Colors.purpleLight, color: Colors.purple, fontWeight: 700 } : {}) }}
-                          onClick={() => { setSignalMode(mode); setDegreFilter([]); setPhotoResFilter(false); }}
-                        >{label}</button>
+                          onClick={() => { setSignalMode(mode as typeof signalMode); setDegreFilter([]); setPhotoResFilter(false); }}
+                        >{icon}{label}</button>
                       ))}
                     </div>
                     <div style={s.chipsRow}>
@@ -789,7 +980,7 @@ export default function AdminDashboard() {
                           style={{ ...s.chip, ...(photoResFilter ? { borderColor: Colors.primary, background: Colors.primaryLight, color: Colors.primary, fontWeight: 700 } : {}) }}
                           onClick={() => setPhotoResFilter(v => !v)}
                         >
-                          📷 Avec photos après nettoyage
+                          <MdCameraAlt size={14} /> Avec photos après nettoyage
                         </button>
                         {photoResFilter && (
                           <button style={s.chipClear} onClick={() => setPhotoResFilter(false)}>✕ Effacer</button>
@@ -810,7 +1001,7 @@ export default function AdminDashboard() {
                           style={{ ...s.chip, ...(active ? { borderColor: t.color, background: t.color + '15', color: t.color } : {}) }}
                           onClick={() => toggleType(t.value)}
                         >
-                          <span>{t.icon}</span>
+                          <span style={{ display: 'flex', alignItems: 'center' }}>{DECHET_ICONS[t.value]}</span>
                           <span>{t.value}</span>
                         </button>
                       );
@@ -830,7 +1021,7 @@ export default function AdminDashboard() {
                       return true;
                     });
                     return !filtered.length
-                      ? <EmptyState icon="✅" message="Aucun signalement publié à résoudre" />
+                      ? <EmptyState icon={<MdVerified size={56} />} message="Aucun signalement publié à résoudre" />
                       : (
                         <div style={s.list}>
                           {filtered.map(item => (
@@ -846,10 +1037,24 @@ export default function AdminDashboard() {
                 ) : (
                   modLoading ? <Spinner color={Colors.purple} /> : !filteredModItems().length ? (
                     wilayaFilter
-                      ? <EmptyState icon="🔍" message={`Aucun résultat pour « ${wilayaFilter} »`} />
-                      : <EmptyState icon="✅" message="File vide — rien à modérer" />
+                      ? <EmptyState icon={<MdSearch size={56} />} message={`Aucun résultat pour « ${wilayaFilter} »`} />
+                      : <EmptyState icon={<MdVerified size={56} />} message="File vide — rien à modérer" />
                   ) : (
                     <>
+                      {tab === 'points' && filteredModItems().length > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+                          <button
+                            style={{ background: Colors.red, color: Colors.white, border: 'none', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                            onClick={async () => {
+                              if (!window.confirm(`Rejeter les ${filteredModItems().length} point(s) de collecte en attente ?`)) return;
+                              await Promise.all(filteredModItems().map(item => modererPointCollecte(item.id, 'inactif').catch(() => {})));
+                              loadModTab('points', modPage);
+                            }}
+                          >
+                            Tout rejeter ({filteredModItems().length})
+                          </button>
+                        </div>
+                      )}
                       <div style={s.list}>
                         {filteredModItems().map((item) => (
                           <ItemRow
@@ -859,7 +1064,7 @@ export default function AdminDashboard() {
                             onDetail={() => setDetail({ item, type: tab })}
                             onValidate={() => {
                               if (tab === 'signalements') action(() => modererSignalement(item.id, 'publie'));
-                              if (tab === 'points')       action(() => modererPointCollecte(item.id, 'actif'));
+                              if (tab === 'points')       { setAcceptTarget(item); setAcceptNom(''); setAcceptHoraires(''); }
                             }}
                             onReject={() => {
                               if (tab === 'signalements') action(() => modererSignalement(item.id, 'rejete', 'Rejeté par l\'administrateur'));
@@ -885,7 +1090,7 @@ export default function AdminDashboard() {
                   </div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' as const }}>
                     <div style={{ ...s.searchWrap, minWidth: 220 }}>
-                      <span style={s.searchIcon}>🔍</span>
+                      <span style={s.searchIcon}><MdSearch size={16} /></span>
                       <input
                         style={s.searchInput}
                         placeholder="Rechercher nom, prénom, téléphone..."
@@ -895,7 +1100,7 @@ export default function AdminDashboard() {
                       {usersSearch && <button onClick={() => setUsersSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: Colors.grey, fontSize: 14, padding: '0 4px' }}>✕</button>}
                     </div>
                     <div style={s.searchWrap}>
-                      <span style={s.searchIcon}>📍</span>
+                      <span style={s.searchIcon}><MdLocationOn size={16} /></span>
                       <select style={s.searchInput} value={usersWilaya} onChange={(e) => { setUsersWilaya(e.target.value); setUsersPage(1); }}>
                         <option value=''>Toutes les wilayas</option>
                         {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
@@ -905,7 +1110,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {usersLoading ? <Spinner color={Colors.blue} /> : !users.length ? (
-                  <EmptyState icon="👥" message="Aucun utilisateur trouvé" />
+                  <EmptyState icon={<MdPeople size={56} />} message="Aucun utilisateur trouvé" />
                 ) : (
                   <>
                     <div style={s.list}>
@@ -914,16 +1119,16 @@ export default function AdminDashboard() {
                         const isBanned = u.actif === false;
                         return (
                           <div key={u.id} style={{ ...s.userCard, ...(isBanned ? { opacity: 0.6, background: Colors.redLight } : {}) }}>
-                            <div style={{ ...s.userRank, color: isBanned ? Colors.red : Colors.grey }}>
-                              {isBanned ? '🚫' : `#${rank}`}
+                            <div style={{ ...s.userRank, color: isBanned ? Colors.red : Colors.grey, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              {isBanned ? <MdBlock size={16} /> : `#${rank}`}
                             </div>
                             <div style={{ ...s.userAvatar, background: isBanned ? Colors.red + '22' : undefined, color: isBanned ? Colors.red : undefined }}>
                               {(u.prenom?.[0] ?? '?').toUpperCase()}{(u.nom?.[0] ?? '').toUpperCase()}
                             </div>
                             <div style={s.userInfo}>
                               <p style={s.userName}>{u.prenom} {u.nom}</p>
-                              <p style={s.userMeta}>
-                                {u.wilaya ? `📍 ${u.wilaya}` : 'Wilaya non renseignée'}
+                              <p style={{ ...s.userMeta, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                {u.wilaya ? <><MdLocationOn size={13} />{u.wilaya}</> : 'Wilaya non renseignée'}
                                 {u.telephone ? ` · ${u.telephone}` : ''}
                               </p>
                             </div>
@@ -936,7 +1141,9 @@ export default function AdminDashboard() {
                                 onClick={() => setBanTarget({ id: u.id, nom: u.nom, prenom: u.prenom, actif: u.actif !== false })}
                                 style={{ background: (isBanned ? Colors.primary : Colors.red) + '15', color: isBanned ? Colors.primary : Colors.red, border: `1.5px solid ${(isBanned ? Colors.primary : Colors.red)}30`, borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const }}
                               >
-                                {isBanned ? '✓ Réactiver' : '🚫 Bannir'}
+                                {isBanned
+                                  ? <><MdPersonAdd size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Réactiver</>
+                                  : <><MdBlock size={14} style={{ verticalAlign: 'middle', marginRight: 4 }} />Bannir</>}
                               </button>
                             </div>
                           </div>
@@ -979,7 +1186,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 {empLoading ? <Spinner color={Colors.primary} /> : !empList.length ? (
-                  <EmptyState icon="👷" message="Aucun employé" />
+                  <EmptyState icon={<MdEngineering size={16} />} message="Aucun employé" />
                 ) : (
                   <>
                     <div style={s.list}>
@@ -998,12 +1205,12 @@ export default function AdminDashboard() {
                               setEditEmpTarget(e);
                               setEmpForm({ nom: e.nom, prenom: e.prenom, telephone: e.telephone, wilaya: e.wilaya ?? '' });
                               setEmpFormError('');
-                            }}>✏️</SmallBtn>
+                            }}><MdEdit size={16} /></SmallBtn>
                             <SmallBtn color={e.statut === 'actif' ? Colors.orange : Colors.primary}
                               onClick={() => modifierEmploye(e.id, { statut: e.statut === 'actif' ? 'inactif' : 'actif' }).then(() => loadEmployes(empPage))}>
-                              {e.statut === 'actif' ? '⏸' : '▶'}
+                              {e.statut === 'actif' ? <MdWarning size={15} /> : <MdCheck size={15} />}
                             </SmallBtn>
-                            <SmallBtn color={Colors.red} onClick={() => setDeleteEmpTarget(e.id)}>🗑</SmallBtn>
+                            <SmallBtn color={Colors.red} onClick={() => setDeleteEmpTarget(e.id)}><MdDelete size={16} /></SmallBtn>
                           </div>
                         </div>
                       ))}
@@ -1045,7 +1252,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 {camLoading ? <Spinner color={Colors.primary} /> : !camList.length ? (
-                  <EmptyState icon="🚛" message="Aucun camion" />
+                  <EmptyState icon={<MdLocalShipping size={16} />} message="Aucun camion" />
                 ) : (
                   <>
                     <div style={s.list}>
@@ -1067,8 +1274,8 @@ export default function AdminDashboard() {
                                 setEditCamTarget(c);
                                 setCamForm({ immatriculation: c.immatriculation, capacite: c.capacite?.toString() ?? '', wilaya: c.wilaya ?? '' });
                                 setCamFormError('');
-                              }}>✏️</SmallBtn>
-                              <SmallBtn color={Colors.red} onClick={() => setDeleteCamTarget(c.id)}>🗑</SmallBtn>
+                              }}><MdEdit size={16} /></SmallBtn>
+                              <SmallBtn color={Colors.red} onClick={() => setDeleteCamTarget(c.id)}><MdDelete size={16} /></SmallBtn>
                             </div>
                           </div>
                         );
@@ -1112,7 +1319,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 {colLoading ? <Spinner color={Colors.primary} /> : !colList.length ? (
-                  <EmptyState icon="📋" message="Aucune collecte planifiée" />
+                  <EmptyState icon={<MdAssignment size={16} />} message="Aucune collecte planifiée" />
                 ) : (
                   <>
                     <div style={s.list}>
@@ -1140,15 +1347,15 @@ export default function AdminDashboard() {
                                 {c.statut.replace('_', ' ')}
                               </span>
                               {c.statut === 'planifiee' && (
-                                <SmallBtn color={Colors.blue} onClick={() => modifierStatutCollecte(c.id, 'en_cours').then(() => loadCollectes(colPage))}>▶ Démarrer</SmallBtn>
+                                <SmallBtn color={Colors.blue} onClick={() => modifierStatutCollecte(c.id, 'en_cours').then(() => loadCollectes(colPage))}><MdRefresh size={15} /></SmallBtn>
                               )}
                               {c.statut === 'en_cours' && (
-                                <SmallBtn color={Colors.primary} onClick={() => modifierStatutCollecte(c.id, 'terminee').then(() => loadCollectes(colPage))}>✓ Terminer</SmallBtn>
+                                <SmallBtn color={Colors.primary} onClick={() => modifierStatutCollecte(c.id, 'terminee').then(() => loadCollectes(colPage))}><MdCheck size={15} /></SmallBtn>
                               )}
                               {(c.statut === 'planifiee' || c.statut === 'en_cours') && (
-                                <SmallBtn color={Colors.red} onClick={() => modifierStatutCollecte(c.id, 'annulee').then(() => loadCollectes(colPage))}>✕</SmallBtn>
+                                <SmallBtn color={Colors.red} onClick={() => modifierStatutCollecte(c.id, 'annulee').then(() => loadCollectes(colPage))}><MdClose size={15} /></SmallBtn>
                               )}
-                              <SmallBtn color={Colors.red} onClick={() => setDeleteColTarget(c.id)}>🗑</SmallBtn>
+                              <SmallBtn color={Colors.red} onClick={() => setDeleteColTarget(c.id)}><MdDelete size={16} /></SmallBtn>
                             </div>
                           </div>
                         );
@@ -1170,7 +1377,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
                 {evLoading ? <Spinner color={Colors.primary} /> : !evList.length ? (
-                  <EmptyState icon="📅" message="Aucun événement pour l'instant" />
+                  <EmptyState icon={<MdEvent size={56} />} message="Aucun événement pour l'instant" />
                 ) : (
                   <>
                     <div style={s.list}>
@@ -1180,11 +1387,11 @@ export default function AdminDashboard() {
                           <div key={ev.id} style={{ ...r.card, opacity: isMasque ? 0.6 : 1, borderLeft: isMasque ? `4px solid ${Colors.grey}` : `4px solid ${Colors.primary}` }}>
                             {ev.photo
                               ? <img src={ev.photo} alt="" style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover' as const, flexShrink: 0 }} />
-                              : <div style={{ width: 56, height: 56, borderRadius: 8, background: Colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 22 }}>📅</div>
+                              : <div style={{ width: 56, height: 56, borderRadius: 8, background: Colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: Colors.primary }}><MdEvent size={26} /></div>
                             }
                             <div style={r.info}>
                               <p style={r.title}>{ev.titre}</p>
-                              <p style={r.meta}>{ev.association?.nom}{ev.wilaya ? ` · 📍 ${ev.wilaya}` : ''}</p>
+                              <p style={{ ...r.meta, display: 'flex', alignItems: 'center', gap: 4 }}>{ev.association?.nom}{ev.wilaya ? <><span>·</span><MdLocationOn size={13} />{ev.wilaya}</> : ''}</p>
                               <p style={r.date}>{new Date(ev.date_debut).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                             </div>
                             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -1193,7 +1400,7 @@ export default function AdminDashboard() {
                               ) : (
                                 <button style={evBtn(Colors.orange)} onClick={() => masquerEvenementAdmin(ev.id).then(() => loadEvenements(evPage))}>Masquer</button>
                               )}
-                              <button style={evBtn(Colors.red)} onClick={() => setDeleteEvTarget(ev.id)}>Supprimer</button>
+                              <button style={{ background: Colors.red + '15', color: Colors.red, border: `1.5px solid ${Colors.red}40`, borderRadius: 8, padding: '6px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setDeleteEvTarget(ev.id)} title="Supprimer"><MdDelete size={16} /></button>
                             </div>
                           </div>
                         );
@@ -1214,37 +1421,48 @@ export default function AdminDashboard() {
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 20 }}>
                   <ConfigField
+                    icon={<MdReportProblem size={20} color={Colors.orange} />}
                     label="Points pour un signalement publié"
                     description="Attribués au citoyen quand son signalement est validé par l'admin"
                     value={configData.points_signalement}
                     onChange={v => setConfigData(d => ({ ...d, points_signalement: v }))}
                   />
                   <ConfigField
+                    icon={<MdCrisisAlert size={20} color={Colors.red} />}
                     label="Bonus signalement critique (degré 5)"
                     description="Points supplémentaires pour un signalement de niveau critique"
                     value={configData.points_signalement_critique}
                     onChange={v => setConfigData(d => ({ ...d, points_signalement_critique: v }))}
                   />
                   <ConfigField
+                    icon={<MdEvent size={20} color={Colors.blue} />}
                     label="Points pour participation à un événement"
                     description="Attribués au citoyen lors du scan QR de présence"
                     value={configData.points_participation}
                     onChange={v => setConfigData(d => ({ ...d, points_participation: v }))}
                   />
+                  <ConfigField
+                    icon={<MdOutlineAddLocationAlt size={20} color={Colors.primary} />}
+                    label="Points pour proposition de point de collecte"
+                    description="Attribués au citoyen quand l'admin accepte sa proposition de point"
+                    value={configData.points_proposition_point}
+                    onChange={v => setConfigData(d => ({ ...d, points_proposition_point: v }))}
+                  />
                 </div>
                 {configErr && <p style={{ color: Colors.red, fontSize: 13, marginTop: 16 }}>{configErr}</p>}
                 {configMsg && <p style={{ color: Colors.primary, fontSize: 13, marginTop: 16 }}>{configMsg}</p>}
                 <button
-                  style={{ ...s.createBtn, marginTop: 24, opacity: configSaving ? 0.6 : 1 }}
+                  style={{ ...s.createBtn, marginTop: 24, opacity: configSaving ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
                   onClick={saveConfig}
                   disabled={configSaving}
                 >
-                  {configSaving ? 'Enregistrement...' : '💾 Enregistrer'}
+                  <MdSave size={18} />
+                  {configSaving ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
 
                 <div style={{ marginTop: 48, paddingTop: 32, borderTop: `1px solid ${Colors.greyBorder}` }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 600, color: Colors.black, marginBottom: 8 }}>
-                    🏆 Récompenses mensuelles — Top 20
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: Colors.black, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <MdEmojiEvents size={20} color={Colors.orange} /> Récompenses mensuelles — Top 20
                   </h3>
                   <p style={{ fontSize: 13, color: Colors.grey, marginBottom: 20, lineHeight: 1.6 }}>
                     Envoie une notification push aux 20 citoyens ayant le plus de points. À déclencher manuellement en fin de mois.
@@ -1252,11 +1470,12 @@ export default function AdminDashboard() {
                   {top20Err && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{top20Err}</p>}
                   {top20Msg && <p style={{ color: Colors.primary, fontSize: 13, marginBottom: 12 }}>{top20Msg}</p>}
                   <button
-                    style={{ ...s.createBtn, background: Colors.purple, opacity: top20Loading ? 0.6 : 1 }}
+                    style={{ ...s.createBtn, background: Colors.purple, opacity: top20Loading ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
                     onClick={handleNotifierTop20}
                     disabled={top20Loading}
                   >
-                    {top20Loading ? 'Envoi en cours...' : '🔔 Notifier le top 20'}
+                    <MdNotificationsActive size={18} />
+                    {top20Loading ? 'Envoi en cours...' : 'Notifier le top 20'}
                   </button>
                 </div>
               </div>
@@ -1268,9 +1487,9 @@ export default function AdminDashboard() {
 
       {/* ── Delete event confirm ── */}
       {deleteEvTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 380 }}>
-            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>🗑</div>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}><MdDelete size={26} /></div>
             <h3 style={s.modalTitle}>Supprimer l'événement ?</h3>
             <p style={s.modalDesc}>Cette action est irréversible. Les participations associées seront également supprimées.</p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
@@ -1292,11 +1511,11 @@ export default function AdminDashboard() {
             <div style={s.panelHeader}>
               <div>
                 <h3 style={s.panelTitle}>
-                  {TABS.find(t => t.id === detail.type)?.icon} Détail
+                  Détail
                 </h3>
                 <p style={s.panelSubtitle}>{TABS.find(t => t.id === detail.type)?.label}</p>
               </div>
-              <button style={s.closeBtn} onClick={closeDetail}>✕</button>
+              <button style={s.closeBtn} onClick={closeDetail}><MdClose size={18} /></button>
             </div>
             <div style={s.panelBody}>
               {detail.type === 'signalements' && (
@@ -1310,32 +1529,27 @@ export default function AdminDashboard() {
             </div>
             <div style={s.panelFooter}>
               {detail.type === 'signalements' && signalMode === 'a_resoudre' ? (
-                <>
-                  <ActionBtn color={Colors.primary} icon="✓" onClick={async () => {
-                    await modererSignalement(detail.item.id, 'resolu'); closeDetail(); loadMain(); loadResoudre();
-                  }}>Résolu</ActionBtn>
-                  <ActionBtn color={Colors.red} icon="✗" onClick={async () => {
-                    await modererSignalement(detail.item.id, 'rejete'); closeDetail(); loadMain(); loadResoudre();
-                  }}>Rejeter</ActionBtn>
-                </>
+                <ActionBtn color={Colors.primary} icon={<MdCheck size={16} />} onClick={async () => {
+                  await modererSignalement(detail.item.id, 'resolu'); closeDetail(); loadMain(); loadResoudre();
+                }}>Résolu</ActionBtn>
               ) : (
                 <>
                   {!(detail.type === 'associations' && detail.item.statut !== 'en_attente') && (
-                    <ActionBtn color={Colors.primary} icon="✓" onClick={() => {
+                    <ActionBtn color={Colors.primary} icon={<MdCheck size={16} />} onClick={() => {
                       if (detail.type === 'associations') action(() => modererAssociation(detail.item.id, 'validee'));
                       if (detail.type === 'signalements') action(() => modererSignalement(detail.item.id, 'publie'));
-                      if (detail.type === 'points')       action(() => modererPointCollecte(detail.item.id, 'actif'));
+                      if (detail.type === 'points')       { setAcceptTarget(detail.item); setAcceptNom(''); setAcceptHoraires(''); closeDetail(); }
                     }}>Valider</ActionBtn>
                   )}
                   {detail.type === 'signalements' && (
-                    <ActionBtn color={Colors.blue} icon="✓" onClick={() => action(() => modererSignalement(detail.item.id, 'resolu'))}>
+                    <ActionBtn color={Colors.blue} icon={<MdCheck size={16} />} onClick={() => action(() => modererSignalement(detail.item.id, 'resolu'))}>
                       Résolu
                     </ActionBtn>
                   )}
                   {!(detail.type === 'associations' && detail.item.statut !== 'en_attente') && (
-                    <ActionBtn color={Colors.red} icon="✗" onClick={() => {
+                    <ActionBtn color={Colors.red} icon={<MdClose size={16} />} onClick={() => {
                       if (detail.type === 'associations') { setRejectTarget(detail.item.id); setRejectMotif(''); closeDetail(); }
-                      else if (detail.type === 'signalements') action(() => modererSignalement(detail.item.id, 'rejete'));
+                      else if (detail.type === 'signalements') { setSignalRejectTarget(detail.item.id); setRejectMotif(''); closeDetail(); }
                       else if (detail.type === 'points')       action(() => modererPointCollecte(detail.item.id, 'inactif'));
                     }}>Rejeter</ActionBtn>
                   )}
@@ -1348,9 +1562,9 @@ export default function AdminDashboard() {
 
       {/* ── Create point modal ── */}
       {showCreatePoint && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' as const }}>
-            <div style={{ ...s.modalIcon, background: Colors.primaryLight, color: Colors.primary }}>📍</div>
+            <div style={{ ...s.modalIcon, background: Colors.primaryLight, color: Colors.primary }}><MdAdd size={26} /></div>
             <h3 style={s.modalTitle}>Nouveau point de collecte</h3>
             {createPointError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{createPointError}</p>}
             <input placeholder="Nom *" value={createPointForm.nom} onChange={e => setCreatePointForm(f => ({ ...f, nom: e.target.value }))} style={s.formInput} />
@@ -1409,10 +1623,10 @@ export default function AdminDashboard() {
               <button type="button" onClick={() => {
                 const lat = parseFloat(createPointForm.latitude);
                 const lng = parseFloat(createPointForm.longitude);
-                setCreatePointMapMarker(!isNaN(lat) && !isNaN(lng) ? [lat, lng] : [36.7538, 3.0588]);
+                if (!isNaN(lat) && !isNaN(lng)) setCreatePointMapMarker([lat, lng]);
                 setCreatePointMapOpen(true);
               }} style={{ ...s.chip, borderColor: Colors.primary, color: Colors.primary, background: Colors.primaryLight, fontWeight: 700, whiteSpace: 'nowrap', height: 38 }}>
-                🗺️ Carte
+                <MdMap size={15} style={{ verticalAlign: 'middle', marginRight: 4 }} />Carte
               </button>
             </div>
             <p style={{ fontSize: 11, color: Colors.grey, marginBottom: 10 }}>Types de déchets *</p>
@@ -1426,27 +1640,30 @@ export default function AdminDashboard() {
                       ...f,
                       type_dechet: active ? f.type_dechet.filter(x => x !== t.value) : [...f.type_dechet, t.value],
                     }))}>
-                    {t.icon} {t.value}
+                    <span style={{ display: 'flex', alignItems: 'center' }}>{DECHET_ICONS[t.value]}</span> {t.value}
                   </button>
                 );
               })}
             </div>
-            <textarea placeholder="Description" rows={2} value={createPointForm.description} onChange={e => setCreatePointForm(f => ({ ...f, description: e.target.value }))} style={{ ...s.formInput, height: 60, resize: 'vertical' as const }} />
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setShowCreatePoint(false)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.primary} icon="📍"
+              <ActionBtn color={Colors.grey} onClick={() => setShowCreatePoint(false)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.primary} icon={<MdLocationOn size={16} />}
                 disabled={createPointLoading || !createPointForm.nom.trim() || !createPointForm.wilaya || !createPointForm.latitude || !createPointForm.longitude || createPointForm.type_dechet.length === 0}
                 onClick={async () => {
                   setCreatePointLoading(true); setCreatePointError('');
                   try {
-                    await creerPointCollecte({
+                    const res = await creerPointCollecte({
                       nom: createPointForm.nom, wilaya: createPointForm.wilaya,
                       adresse: createPointForm.adresse || undefined, horaires: createPointForm.horaires || undefined,
-                      description: createPointForm.description || undefined,
                       latitude: parseFloat(createPointForm.latitude), longitude: parseFloat(createPointForm.longitude),
                       type_dechet: createPointForm.type_dechet,
                     });
-                    setShowCreatePoint(false); loadPoints(pointsPage); loadMain();
+                    const newId = res.data.data?.id;
+                    if (newId) await modifierPointCollecteAdmin(newId, { statut: 'actif' });
+                    setShowCreatePoint(false);
+                    setPointsSubTab('actifs');
+                    loadPoints(1);
+                    loadMain();
                   } catch (e: any) {
                     setCreatePointError(e?.response?.data?.error ?? 'Erreur lors de la création');
                   } finally { setCreatePointLoading(false); }
@@ -1475,8 +1692,18 @@ export default function AdminDashboard() {
             </div>
             <div style={{ height: 420 }}>
               <MapContainer
-                center={createPointMapMarker ?? [36.7538, 3.0588]}
-                zoom={10}
+                center={(() => {
+                  if (createPointMapMarker) return createPointMapMarker;
+                  const w = WILAYAS.find(w => w.nom === createPointForm.wilaya);
+                  if (w) return [w.lat, w.lng] as [number, number];
+                  return [28.0339, 1.6596] as [number, number];
+                })()}
+                zoom={(() => {
+                  if (createPointMapMarker) return 14;
+                  const w = WILAYAS.find(w => w.nom === createPointForm.wilaya);
+                  if (w) return w.zoom;
+                  return 6;
+                })()}
                 style={{ height: '100%', width: '100%' }}
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -1511,9 +1738,9 @@ export default function AdminDashboard() {
 
       {/* ── Edit point modal ── */}
       {editPointTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 540, maxHeight: '90vh', overflowY: 'auto' as const }}>
-            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}>✏️</div>
+            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}><MdEdit size={26} /></div>
             <h3 style={s.modalTitle}>Modifier le point de collecte</h3>
             {editPointError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{editPointError}</p>}
             <input placeholder="Nom" value={editPointForm.nom} onChange={e => setEditPointForm(f => ({ ...f, nom: e.target.value }))} style={s.formInput} />
@@ -1571,15 +1798,14 @@ export default function AdminDashboard() {
                       ...f,
                       type_dechet: active ? f.type_dechet.filter(x => x !== t.value) : [...f.type_dechet, t.value],
                     }))}>
-                    {t.icon} {t.value}
+                    <span style={{ display: 'flex', alignItems: 'center' }}>{DECHET_ICONS[t.value]}</span> {t.value}
                   </button>
                 );
               })}
             </div>
-            <textarea placeholder="Description" rows={2} value={editPointForm.description} onChange={e => setEditPointForm(f => ({ ...f, description: e.target.value }))} style={{ ...s.formInput, height: 60, resize: 'vertical' as const }} />
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setEditPointTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.purple} icon="✏️"
+              <ActionBtn color={Colors.grey} onClick={() => setEditPointTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.purple} icon={<MdEdit size={16} />}
                 disabled={editPointLoading}
                 onClick={async () => {
                   setEditPointLoading(true); setEditPointError('');
@@ -1589,7 +1815,6 @@ export default function AdminDashboard() {
                       wilaya: editPointForm.wilaya || undefined,
                       adresse: editPointForm.adresse || undefined,
                       horaires: editPointForm.horaires || undefined,
-                      description: editPointForm.description || undefined,
                       type_dechet: editPointForm.type_dechet.length > 0 ? editPointForm.type_dechet : undefined,
                     });
                     setEditPointTarget(null); loadPoints(pointsPage);
@@ -1604,16 +1829,138 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* ── Accept proposal modal ── */}
+      {acceptTarget !== null && (
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ ...s.modal, maxWidth: 480 }}>
+            <div style={{ ...s.modalIcon, background: Colors.primaryLight, color: Colors.primary }}><MdCheck size={26} /></div>
+            <h3 style={s.modalTitle}>Accepter la proposition</h3>
+            <p style={{ fontSize: 13, color: Colors.grey, marginBottom: 16, textAlign: 'center' as const }}>
+              {acceptTarget.wilaya}{acceptTarget.adresse ? ` · ${acceptTarget.adresse}` : ''}
+            </p>
+            <input
+              placeholder="Nom du point *"
+              value={acceptNom}
+              onChange={e => setAcceptNom(e.target.value)}
+              style={s.formInput}
+              autoFocus
+            />
+            <div style={{ marginBottom: 10 }}>
+              <p style={{ fontSize: 12, color: Colors.grey, margin: '0 0 6px' }}>Jours d'ouverture</p>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const, marginBottom: 8 }}>
+                {['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(j => {
+                  const active = acceptHorairesBuilder.jours.includes(j);
+                  return (
+                    <button key={j} type="button"
+                      style={{ padding: '5px 9px', borderRadius: 8, border: `1.5px solid ${active ? Colors.primary : Colors.greyBorder}`, background: active ? Colors.primaryLight : Colors.white, color: active ? Colors.primary : Colors.grey, fontWeight: active ? 700 : 400, fontSize: 12, cursor: 'pointer' }}
+                      onClick={() => setAcceptHorairesBuilder(b => {
+                        const jours = b.jours.includes(j) ? b.jours.filter(x => x !== j) : [...b.jours, j];
+                        const next = { ...b, jours };
+                        setAcceptHoraires(computeHoraires(next));
+                        return next;
+                      })}
+                    >{j}</button>
+                  );
+                })}
+                <button type="button" style={{ padding: '5px 9px', borderRadius: 8, border: `1.5px solid ${Colors.greyBorder}`, background: Colors.white, color: Colors.grey, fontSize: 12, cursor: 'pointer' }}
+                  onClick={() => { const next = { ...acceptHorairesBuilder, jours: ['Lun','Mar','Mer','Jeu','Ven'] }; setAcceptHorairesBuilder(next); setAcceptHoraires(computeHoraires(next)); }}>Lun-Ven</button>
+                <button type="button" style={{ padding: '5px 9px', borderRadius: 8, border: `1.5px solid ${Colors.greyBorder}`, background: Colors.white, color: Colors.grey, fontSize: 12, cursor: 'pointer' }}
+                  onClick={() => { const next = { ...acceptHorairesBuilder, jours: ['Lun','Mar','Mer','Jeu','Ven','Sam'] }; setAcceptHorairesBuilder(next); setAcceptHoraires(computeHoraires(next)); }}>Lun-Sam</button>
+                <button type="button" style={{ padding: '5px 9px', borderRadius: 8, border: `1.5px solid ${Colors.greyBorder}`, background: Colors.white, color: Colors.grey, fontSize: 12, cursor: 'pointer' }}
+                  onClick={() => { const next = { ...acceptHorairesBuilder, jours: ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'] }; setAcceptHorairesBuilder(next); setAcceptHoraires(computeHoraires(next)); }}>7j/7</button>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 12, color: Colors.grey }}>De</span>
+                <input type="time" value={acceptHorairesBuilder.ouverture}
+                  onChange={e => { const next = { ...acceptHorairesBuilder, ouverture: e.target.value }; setAcceptHorairesBuilder(next); setAcceptHoraires(computeHoraires(next)); }}
+                  style={{ ...s.formInput, width: 110, marginBottom: 0 }} />
+                <span style={{ fontSize: 12, color: Colors.grey }}>à</span>
+                <input type="time" value={acceptHorairesBuilder.fermeture}
+                  onChange={e => { const next = { ...acceptHorairesBuilder, fermeture: e.target.value }; setAcceptHorairesBuilder(next); setAcceptHoraires(computeHoraires(next)); }}
+                  style={{ ...s.formInput, width: 110, marginBottom: 0 }} />
+              </div>
+              {acceptHoraires && (
+                <p style={{ fontSize: 12, color: Colors.primary, fontWeight: 600, margin: '6px 0 0' }}>→ {acceptHoraires}</p>
+              )}
+            </div>
+            <div style={s.modalRow}>
+              <ActionBtn color={Colors.grey} onClick={() => setAcceptTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn
+                color={Colors.primary}
+                icon={<MdCheck size={16} />}
+                disabled={acceptLoading || !acceptNom.trim()}
+                onClick={async () => {
+                  setAcceptLoading(true);
+                  try {
+                    await modifierPointCollecteAdmin(acceptTarget.id, {
+                      statut: 'actif',
+                      nom: acceptNom.trim(),
+                      horaires: acceptHoraires.trim() || undefined,
+                    });
+                    setAcceptTarget(null);
+                    loadPropositions();
+                    loadPoints(pointsPage);
+                    loadMain();
+                  } catch (e: any) {
+                    alert(e?.response?.data?.error ?? 'Erreur lors de la validation');
+                  } finally { setAcceptLoading(false); }
+                }}
+              >{acceptLoading ? 'Validation...' : 'Valider et activer'}</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reject proposal modal ── */}
+      {rejectPointTarget !== null && (
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ ...s.modal, maxWidth: 440 }}>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>
+              <MdClose size={26} />
+            </div>
+            <h3 style={s.modalTitle}>Rejeter cette proposition ?</h3>
+            <div style={{ background: Colors.greyLight, borderRadius: 12, padding: '12px 16px', marginBottom: 20, textAlign: 'left' as const }}>
+              {rejectPointTarget.nom && (
+                <p style={{ fontSize: 14, fontWeight: 700, color: Colors.primaryDark, margin: '0 0 6px' }}>{rejectPointTarget.nom}</p>
+              )}
+              {(rejectPointTarget.wilaya || rejectPointTarget.adresse) && (
+                <p style={{ fontSize: 13, color: Colors.grey, margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <MdLocationOn size={14} color={Colors.grey} />
+                  {[rejectPointTarget.wilaya, rejectPointTarget.adresse].filter(Boolean).join(' · ')}
+                </p>
+              )}
+              {Array.isArray(rejectPointTarget.type_dechet) && rejectPointTarget.type_dechet.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 5, marginTop: 6 }}>
+                  {rejectPointTarget.type_dechet.map((t: string) => (
+                    <span key={t} style={{ fontSize: 11, background: Colors.orangeLight, color: Colors.orange, borderRadius: 20, padding: '2px 10px', fontWeight: 600 }}>{t}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p style={s.modalDesc}>La proposition sera définitivement rejetée et le citoyen ne recevra pas de points.</p>
+            <div style={s.modalRow}>
+              <ActionBtn color={Colors.grey} onClick={() => setRejectPointTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon={<MdClose size={16} />} onClick={async () => {
+                const id = rejectPointTarget.id;
+                setRejectPointTarget(null);
+                await modifierPointCollecteAdmin(id, { statut: 'inactif' });
+                loadPropositions();
+              }}>Confirmer le rejet</ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Delete point confirm ── */}
       {deletePointTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 420 }}>
-            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>🗑</div>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}><MdDelete size={26} /></div>
             <h3 style={s.modalTitle}>Supprimer ce point ?</h3>
             <p style={s.modalDesc}>Cette action est irréversible.</p>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setDeletePointTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.red} icon="🗑" onClick={async () => {
+              <ActionBtn color={Colors.grey} onClick={() => setDeletePointTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon={<MdDelete size={16} />} onClick={async () => {
                 await supprimerPointCollecteAdmin(deletePointTarget!);
                 setDeletePointTarget(null); loadPoints(pointsPage); loadMain();
               }}>Confirmer</ActionBtn>
@@ -1624,10 +1971,10 @@ export default function AdminDashboard() {
 
       {/* ── Ban confirm modal ── */}
       {banTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 420 }}>
             <div style={{ ...s.modalIcon, background: banTarget.actif ? Colors.redLight : Colors.primaryLight, color: banTarget.actif ? Colors.red : Colors.primary }}>
-              {banTarget.actif ? '🚫' : '✓'}
+              {banTarget.actif ? <MdBlock size={26} /> : <MdPersonAdd size={26} />}
             </div>
             <h3 style={s.modalTitle}>{banTarget.actif ? 'Bannir cet utilisateur ?' : 'Réactiver cet utilisateur ?'}</h3>
             <p style={s.modalDesc}>
@@ -1637,8 +1984,8 @@ export default function AdminDashboard() {
                 : 'Il pourra à nouveau accéder à l\'application.'}
             </p>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setBanTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={banTarget.actif ? Colors.red : Colors.primary} icon={banTarget.actif ? '🚫' : '✓'}
+              <ActionBtn color={Colors.grey} onClick={() => setBanTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={banTarget.actif ? Colors.red : Colors.primary} icon={banTarget.actif ? <MdPersonOff size={16} /> : <MdPersonAdd size={16} />}
                 onClick={async () => {
                   const newActif = !banTarget.actif;
                   await banUtilisateur(banTarget.id, newActif);
@@ -1654,9 +2001,9 @@ export default function AdminDashboard() {
 
       {/* ── Create association modal ── */}
       {showCreateAssoc && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 520 }}>
-            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}>🏢</div>
+            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}><MdBusiness size={26} /></div>
             <h3 style={s.modalTitle}>Nouvelle association</h3>
             {createError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{createError}</p>}
             <input placeholder="Nom *" value={createForm.nom} onChange={e => setCreateForm(f => ({ ...f, nom: e.target.value }))} style={s.formInput} />
@@ -1671,8 +2018,8 @@ export default function AdminDashboard() {
             </select>
             <textarea placeholder="Description" rows={3} value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))} style={{ ...s.formInput, height: 72, resize: 'vertical' as const }} />
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setShowCreateAssoc(false)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.purple} icon="🏢" disabled={createLoading || !createForm.nom.trim() || !createForm.email.trim() || createForm.mot_de_passe.length < 8 || !createForm.wilaya}
+              <ActionBtn color={Colors.grey} onClick={() => setShowCreateAssoc(false)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.purple} icon={<MdBusiness size={16} />} disabled={createLoading || !createForm.nom.trim() || !createForm.email.trim() || createForm.mot_de_passe.length < 8 || !createForm.wilaya}
                 onClick={async () => {
                   setCreateLoading(true); setCreateError('');
                   try {
@@ -1693,14 +2040,14 @@ export default function AdminDashboard() {
 
       {/* ── Delete association confirm ── */}
       {deleteAssocTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 420 }}>
-            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>🗑</div>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}><MdDelete size={26} /></div>
             <h3 style={s.modalTitle}>Supprimer l'association ?</h3>
             <p style={s.modalDesc}>Cette action est irréversible. Tous les événements liés seront également supprimés.</p>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setDeleteAssocTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.red} icon="🗑" onClick={async () => {
+              <ActionBtn color={Colors.grey} onClick={() => setDeleteAssocTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon={<MdDelete size={16} />} onClick={async () => {
                 await supprimerAssociation(deleteAssocTarget!);
                 setDeleteAssocTarget(null);
                 loadAssociations(assocPage);
@@ -1713,7 +2060,7 @@ export default function AdminDashboard() {
 
       {/* ── Reject modal ── */}
       {rejectTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={s.modal}>
             <div style={s.modalIcon}>✗</div>
             <h3 style={s.modalTitle}>Motif de rejet</h3>
@@ -1722,9 +2069,30 @@ export default function AdminDashboard() {
               onChange={(e) => setRejectMotif(e.target.value)}
               placeholder="Expliquez la raison du rejet..." />
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setRejectTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.red} icon="✗" disabled={!rejectMotif.trim()}
+              <ActionBtn color={Colors.grey} onClick={() => setRejectTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon={<MdClose size={16} />} disabled={!rejectMotif.trim()}
                 onClick={() => action(() => { setRejectTarget(null); return modererAssociation(rejectTarget!, 'rejetee', rejectMotif); })}>
+                Confirmer le rejet
+              </ActionBtn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reject signalement modal ── */}
+      {signalRejectTarget !== null && (
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
+          <div style={s.modal}>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>✗</div>
+            <h3 style={s.modalTitle}>Motif de rejet</h3>
+            <p style={s.modalDesc}>Ce motif sera enregistré avec le signalement.</p>
+            <textarea style={s.motifArea} rows={4} value={rejectMotif}
+              onChange={(e) => setRejectMotif(e.target.value)}
+              placeholder="Expliquez la raison du rejet..." />
+            <div style={s.modalRow}>
+              <ActionBtn color={Colors.grey} onClick={() => setSignalRejectTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon={<MdClose size={16} />} disabled={!rejectMotif.trim()}
+                onClick={() => action(() => { setSignalRejectTarget(null); return modererSignalement(signalRejectTarget!, 'rejete', rejectMotif); })}>
                 Confirmer le rejet
               </ActionBtn>
             </div>
@@ -1734,7 +2102,7 @@ export default function AdminDashboard() {
 
       {/* ── Employé : create modal ── */}
       {showCreateEmp && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 460 }}>
             <div style={{ ...s.modalIcon, background: Colors.blueLight, color: Colors.blue }}>👷</div>
             <h3 style={s.modalTitle}>Nouvel employé</h3>
@@ -1749,8 +2117,8 @@ export default function AdminDashboard() {
               {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
             </select>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setShowCreateEmp(false)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.blue} icon="👷" disabled={empFormLoading || !empForm.nom.trim() || !empForm.prenom.trim() || !empForm.telephone.trim()}
+              <ActionBtn color={Colors.grey} onClick={() => setShowCreateEmp(false)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.blue} icon={<MdEngineering size={16} />} disabled={empFormLoading || !empForm.nom.trim() || !empForm.prenom.trim() || !empForm.telephone.trim()}
                 onClick={async () => {
                   setEmpFormLoading(true); setEmpFormError('');
                   try {
@@ -1766,9 +2134,9 @@ export default function AdminDashboard() {
 
       {/* ── Employé : edit modal ── */}
       {editEmpTarget && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 460 }}>
-            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}>✏️</div>
+            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}><MdEdit size={26} /></div>
             <h3 style={s.modalTitle}>Modifier l'employé</h3>
             {empFormError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{empFormError}</p>}
             <div style={{ display: 'flex', gap: 10 }}>
@@ -1781,8 +2149,8 @@ export default function AdminDashboard() {
               {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
             </select>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setEditEmpTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.purple} icon="✏️" disabled={empFormLoading}
+              <ActionBtn color={Colors.grey} onClick={() => setEditEmpTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.purple} icon={<MdEdit size={16} />} disabled={empFormLoading}
                 onClick={async () => {
                   setEmpFormLoading(true); setEmpFormError('');
                   try {
@@ -1798,14 +2166,14 @@ export default function AdminDashboard() {
 
       {/* ── Employé : delete confirm ── */}
       {deleteEmpTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 400 }}>
-            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>🗑</div>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}><MdDelete size={26} /></div>
             <h3 style={s.modalTitle}>Supprimer cet employé ?</h3>
             <p style={s.modalDesc}>Cette action est irréversible.</p>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setDeleteEmpTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.red} icon="🗑" onClick={async () => {
+              <ActionBtn color={Colors.grey} onClick={() => setDeleteEmpTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon={<MdDelete size={16} />} onClick={async () => {
                 await supprimerEmploye(deleteEmpTarget!); setDeleteEmpTarget(null); loadEmployes(empPage);
               }}>Confirmer</ActionBtn>
             </div>
@@ -1815,9 +2183,9 @@ export default function AdminDashboard() {
 
       {/* ── Camion : create modal ── */}
       {showCreateCam && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 460 }}>
-            <div style={{ ...s.modalIcon, background: Colors.orangeLight, color: Colors.orange }}>🚛</div>
+            <div style={{ ...s.modalIcon, background: Colors.orangeLight, color: Colors.orange }}><MdLocalShipping size={26} /></div>
             <h3 style={s.modalTitle}>Nouveau camion</h3>
             {camFormError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{camFormError}</p>}
             <input placeholder="Immatriculation * (ex: 123-456-07)" value={camForm.immatriculation} onChange={e => setCamForm(f => ({ ...f, immatriculation: e.target.value }))} style={s.formInput} />
@@ -1829,8 +2197,8 @@ export default function AdminDashboard() {
               </select>
             </div>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setShowCreateCam(false)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.orange} icon="🚛" disabled={camFormLoading || !camForm.immatriculation.trim()}
+              <ActionBtn color={Colors.grey} onClick={() => setShowCreateCam(false)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.orange} icon={<MdLocalShipping size={16} />} disabled={camFormLoading || !camForm.immatriculation.trim()}
                 onClick={async () => {
                   setCamFormLoading(true); setCamFormError('');
                   try {
@@ -1846,9 +2214,9 @@ export default function AdminDashboard() {
 
       {/* ── Camion : edit modal ── */}
       {editCamTarget && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 460 }}>
-            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}>✏️</div>
+            <div style={{ ...s.modalIcon, background: Colors.purpleLight, color: Colors.purple }}><MdEdit size={26} /></div>
             <h3 style={s.modalTitle}>Modifier le camion</h3>
             {camFormError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{camFormError}</p>}
             <input placeholder="Immatriculation" value={camForm.immatriculation} onChange={e => setCamForm(f => ({ ...f, immatriculation: e.target.value }))} style={s.formInput} />
@@ -1866,8 +2234,8 @@ export default function AdminDashboard() {
               <option value="en_maintenance">En maintenance</option>
             </select>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setEditCamTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.purple} icon="✏️" disabled={camFormLoading}
+              <ActionBtn color={Colors.grey} onClick={() => setEditCamTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.purple} icon={<MdEdit size={16} />} disabled={camFormLoading}
                 onClick={async () => {
                   setCamFormLoading(true); setCamFormError('');
                   try {
@@ -1883,14 +2251,14 @@ export default function AdminDashboard() {
 
       {/* ── Camion : delete confirm ── */}
       {deleteCamTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 400 }}>
-            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>🗑</div>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}><MdDelete size={26} /></div>
             <h3 style={s.modalTitle}>Supprimer ce camion ?</h3>
             <p style={s.modalDesc}>Cette action est irréversible.</p>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setDeleteCamTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.red} icon="🗑" onClick={async () => {
+              <ActionBtn color={Colors.grey} onClick={() => setDeleteCamTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon={<MdDelete size={16} />} onClick={async () => {
                 await supprimerCamion(deleteCamTarget!); setDeleteCamTarget(null); loadCamions(camPage);
               }}>Confirmer</ActionBtn>
             </div>
@@ -1900,9 +2268,9 @@ export default function AdminDashboard() {
 
       {/* ── Collecte : create modal ── */}
       {showCreateCol && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 500, maxHeight: '90vh', overflowY: 'auto' as const }}>
-            <div style={{ ...s.modalIcon, background: Colors.primaryLight, color: Colors.primary }}>📋</div>
+            <div style={{ ...s.modalIcon, background: Colors.primaryLight, color: Colors.primary }}><MdAssignment size={26} /></div>
             <h3 style={s.modalTitle}>Planifier une collecte</h3>
             {colFormError && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{colFormError}</p>}
             <select value={colForm.employe_id} onChange={e => setColForm(f => ({ ...f, employe_id: e.target.value }))} style={s.formInput}>
@@ -1925,8 +2293,8 @@ export default function AdminDashboard() {
             <input placeholder="N° Signalement lié (optionnel)" type="number" value={colForm.signalement_id} onChange={e => setColForm(f => ({ ...f, signalement_id: e.target.value }))} style={s.formInput} />
             <textarea placeholder="Notes" rows={2} value={colForm.notes} onChange={e => setColForm(f => ({ ...f, notes: e.target.value }))} style={{ ...s.formInput, height: 60, resize: 'vertical' as const }} />
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setShowCreateCol(false)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.primary} icon="📋"
+              <ActionBtn color={Colors.grey} onClick={() => setShowCreateCol(false)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.primary} icon={<MdAssignment size={16} />}
                 disabled={colFormLoading || !colForm.employe_id || !colForm.camion_id || !colForm.date_prevue || (!!colForm.creneau && !/^\d{1,2}h-\d{1,2}h$/.test(colForm.creneau))}
                 onClick={async () => {
                   setColFormLoading(true); setColFormError('');
@@ -1948,14 +2316,14 @@ export default function AdminDashboard() {
 
       {/* ── Collecte : delete confirm ── */}
       {deleteColTarget !== null && (
-        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.5)' }}>
+        <div style={{ ...s.overlay, justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ ...s.modal, maxWidth: 400 }}>
-            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}>🗑</div>
+            <div style={{ ...s.modalIcon, background: Colors.redLight, color: Colors.red }}><MdDelete size={26} /></div>
             <h3 style={s.modalTitle}>Supprimer cette collecte ?</h3>
             <p style={s.modalDesc}>Cette action est irréversible.</p>
             <div style={s.modalRow}>
-              <ActionBtn color={Colors.grey} icon="" onClick={() => setDeleteColTarget(null)}>Annuler</ActionBtn>
-              <ActionBtn color={Colors.red} icon="🗑" onClick={async () => {
+              <ActionBtn color={Colors.grey} onClick={() => setDeleteColTarget(null)}>Annuler</ActionBtn>
+              <ActionBtn color={Colors.red} icon={<MdDelete size={16} />} onClick={async () => {
                 await supprimerCollecte(deleteColTarget!); setDeleteColTarget(null); loadCollectes(colPage);
               }}>Confirmer</ActionBtn>
             </div>
@@ -1966,7 +2334,7 @@ export default function AdminDashboard() {
       {/* ── Lightbox ── */}
       {lightbox && (
         <div style={lb.overlay} onClick={() => setLightbox(null)}>
-          <button style={lb.closeBtn} onClick={() => setLightbox(null)}>✕</button>
+          <button style={lb.closeBtn} onClick={() => setLightbox(null)}><MdClose size={20} /></button>
           <div style={lb.counter}>{lightbox.index + 1} / {lightbox.urls.length}</div>
 
           {lightbox.index > 0 && (
@@ -2264,18 +2632,28 @@ function ItemRow({ item, type, onDetail, onValidate, onReject }: {
   item: any; type: Tab; onDetail: () => void; onValidate: () => void; onReject: () => void;
 }) {
   const labelMap: Record<Tab, string> = {
-    stats: '', utilisateurs: '', carte: '',
+    stats: '', utilisateurs: '', carte: '', employes: '', camions: '', collectes: '', config: '',
     associations: item.nom, evenements: item.titre, signalements: item.titre, points: item.nom,
   };
   const metaMap: Record<Tab, string> = {
-    stats: '', utilisateurs: '', carte: '',
+    stats: '', utilisateurs: '', carte: '', employes: '', camions: '', collectes: '', config: '',
     associations: item.email,
     evenements:   `${item.association?.nom ?? '—'}${item.wilaya ? ` · ${item.wilaya}` : ''}`,
     signalements: `${item.citoyen?.prenom ?? ''} ${item.citoyen?.nom ?? ''}${item.wilaya ? ` · ${item.wilaya}` : ''}`,
     points:       `${item.wilaya ? `${item.wilaya} · ` : ''}${Array.isArray(item.type_dechet) ? item.type_dechet.slice(0, 3).join(', ') : item.type_dechet}`,
   };
-  const icons: Record<Tab, string> = { stats: '', utilisateurs: '', carte: '', associations: '🏢', evenements: '📅', signalements: '⚠️', points: '📍' };
-  const iconColors: Record<Tab, string> = { stats: '', utilisateurs: '', carte: '', associations: Colors.blue, evenements: Colors.purple, signalements: Colors.orange, points: Colors.primary };
+  const iconNodes: Record<Tab, React.ReactNode> = {
+    stats: null, utilisateurs: null, carte: null,
+    associations: <MdBusiness size={20} />,
+    evenements: <MdEvent size={20} />,
+    signalements: <MdReportProblem size={20} />,
+    points: <MdLocationOn size={20} />,
+    employes: <MdEngineering size={20} />,
+    camions: <MdLocalShipping size={20} />,
+    collectes: <MdAssignment size={20} />,
+    config: null,
+  };
+  const iconColors: Record<Tab, string> = { stats: '', utilisateurs: '', carte: '', associations: Colors.blue, evenements: Colors.purple, signalements: Colors.orange, points: Colors.primary, employes: Colors.blue, camions: Colors.orange, collectes: Colors.primary, config: Colors.grey };
 
   const photos: string[] = type === 'signalements' && Array.isArray(item.photos) ? item.photos : [];
   const deg = type === 'signalements' ? (item.degre_pollution ?? 0) : 0;
@@ -2283,7 +2661,7 @@ function ItemRow({ item, type, onDetail, onValidate, onReject }: {
   return (
     <div style={r.card}>
       <div style={{ ...r.icon, background: iconColors[type] + '18', color: iconColors[type] }}>
-        {icons[type]}
+        {iconNodes[type]}
       </div>
       <div style={r.info}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
@@ -2294,8 +2672,8 @@ function ItemRow({ item, type, onDetail, onValidate, onReject }: {
             </span>
           )}
           {photos.length > 0 && (
-            <span style={{ background: Colors.blueLight, color: Colors.blue, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>
-              📷 {photos.length}
+            <span style={{ background: Colors.blueLight, color: Colors.blue, borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+              <MdCameraAlt size={12} /> {photos.length}
             </span>
           )}
         </div>
@@ -2303,9 +2681,9 @@ function ItemRow({ item, type, onDetail, onValidate, onReject }: {
         <p style={r.date}>{new Date(item.created_at).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
       </div>
       <div style={r.actions}>
-        <button style={r.detailBtn} onClick={onDetail}>👁 Détail</button>
-        <SmallBtn color={Colors.primary} onClick={onValidate}>✓</SmallBtn>
-        <SmallBtn color={Colors.red}     onClick={onReject}>✗</SmallBtn>
+        <button style={r.detailBtn} onClick={onDetail}><MdVisibility size={15} style={{ marginRight: 4 }} />Détail</button>
+        <SmallBtn color={Colors.primary} onClick={onValidate}><MdCheck size={16} /></SmallBtn>
+        <SmallBtn color={Colors.red}     onClick={onReject}><MdClose size={16} /></SmallBtn>
       </div>
     </div>
   );
@@ -2320,11 +2698,11 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-function StatCard({ icon, label, value, color, bg }: { icon: string; label: string; value: number; color: string; bg: string }) {
+function StatCard({ icon, label, value, color, bg }: { icon: React.ReactNode; label: string; value: number; color: string; bg: string }) {
   return (
     <div style={sc.card}>
       <div style={{ ...sc.iconWrap, background: bg, color }}>
-        <span style={sc.icon}>{icon}</span>
+        {icon}
       </div>
       <p style={sc.val}>{value.toLocaleString('fr-DZ')}</p>
       <p style={sc.label}>{label}</p>
@@ -2336,17 +2714,18 @@ function StatCard({ icon, label, value, color, bg }: { icon: string; label: stri
 }
 
 function ActionBtn({ children, color, icon, onClick, disabled }: {
-  children: React.ReactNode; color: string; icon: string; onClick?: () => void; disabled?: boolean;
+  children: React.ReactNode; color: string; icon?: React.ReactNode; onClick?: () => void; disabled?: boolean;
 }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      display: 'flex', alignItems: 'center', gap: 6,
+      display: 'flex', alignItems: 'center', gap: 7,
       background: color, color: Colors.white,
-      border: 'none', borderRadius: 10, padding: '10px 20px',
+      border: 'none', borderRadius: 12, padding: '11px 20px',
       fontSize: 14, fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer',
       opacity: disabled ? 0.5 : 1, flex: 1, justifyContent: 'center',
+      boxShadow: `0 4px 12px ${color}30`,
     }}>
-      {icon && <span>{icon}</span>}{children}
+      {icon}{children}
     </button>
   );
 }
@@ -2383,9 +2762,10 @@ function Paginator({ page, total, pageSize, onChange }: { page: number; total: n
 function SmallBtn({ children, color, onClick }: { children: React.ReactNode; color: string; onClick?: () => void }) {
   return (
     <button onClick={onClick} style={{
-      background: color + '15', color, border: `1.5px solid ${color}30`,
-      borderRadius: 8, width: 34, height: 34, fontSize: 15, fontWeight: 700,
+      background: color + '12', color, border: `1.5px solid ${color}25`,
+      borderRadius: 9, width: 34, height: 34,
       cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      transition: 'background 0.15s',
     }}>{children}</button>
   );
 }
@@ -2403,21 +2783,24 @@ function Spinner({ color }: { color: string }) {
   );
 }
 
-function EmptyState({ icon, message }: { icon: string; message: string }) {
+function EmptyState({ icon, message }: { icon: React.ReactNode; message: string }) {
   return (
     <div style={{ textAlign: 'center', padding: '80px 0', color: Colors.grey }}>
-      <div style={{ fontSize: 48, marginBottom: 16 }}>{icon}</div>
-      <p style={{ fontSize: 16, fontWeight: 600 }}>{message}</p>
+      <div style={{ fontSize: 56, marginBottom: 14, display: 'flex', justifyContent: 'center', opacity: 0.35 }}>{icon}</div>
+      <p style={{ fontSize: 15, fontWeight: 600 }}>{message}</p>
     </div>
   );
 }
 
-function ConfigField({ label, description, value, onChange }: { label: string; description: string; value: number; onChange: (v: number) => void }) {
+function ConfigField({ icon, label, description, value, onChange }: { icon: React.ReactNode; label: string; description: string; value: number; onChange: (v: number) => void }) {
   return (
     <div style={{ background: Colors.white, borderRadius: 12, padding: '16px 20px', border: `1px solid ${Colors.greyBorder}` }}>
-      <p style={{ fontSize: 14, fontWeight: 700, color: Colors.primaryDark, marginBottom: 4 }}>{label}</p>
-      <p style={{ fontSize: 12, color: Colors.grey, marginBottom: 12 }}>{description}</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        {icon}
+        <p style={{ fontSize: 14, fontWeight: 700, color: Colors.primaryDark, margin: 0 }}>{label}</p>
+      </div>
+      <p style={{ fontSize: 12, color: Colors.grey, marginBottom: 12, marginLeft: 28 }}>{description}</p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 28 }}>
         <input
           type="number"
           min={0}
@@ -2434,16 +2817,40 @@ function ConfigField({ label, description, value, onChange }: { label: string; d
 /* ── Styles ── */
 
 const s: Record<string, React.CSSProperties> = {
-  layout:    { display: 'flex', minHeight: '100vh', background: '#F8F9FB' },
-  sidebar:   { width: 256, background: Colors.white, borderRight: `1px solid ${Colors.greyBorder}`, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', flexShrink: 0 },
-  sideTop:   { padding: '28px 20px 20px', borderBottom: `1px solid ${Colors.greyBorder}` },
-  logo:      { fontSize: 20, fontWeight: 800, color: Colors.primaryDark, marginBottom: 10 },
-  roleTag:   { display: 'inline-block', background: Colors.purpleLight, color: Colors.purple, borderRadius: 20, padding: '4px 14px', fontSize: 12, fontWeight: 700 },
-  nav:       { flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 2 },
-  navItem:   { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: Colors.grey, fontWeight: 500, textAlign: 'left', width: '100%', transition: 'all 0.15s' },
-  navActive: { background: Colors.purpleLight, color: Colors.purple, fontWeight: 700 },
-  navIcon:   { fontSize: 18, width: 24, textAlign: 'center' },
-  badge:     { marginLeft: 'auto', background: Colors.red, color: Colors.white, borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 },
+  critiqueBanner: {
+    display: 'flex', alignItems: 'center', gap: 12,
+    background: 'rgba(220,38,38,0.08)',
+    border: '1.5px solid rgba(220,38,38,0.25)',
+    backdropFilter: 'blur(8px)',
+    borderRadius: 14, padding: '12px 18px', marginBottom: 20,
+    color: '#991B1B',
+  },
+  critiqueBtn: {
+    background: '#DC2626', color: '#fff', border: 'none',
+    borderRadius: 8, padding: '6px 14px', fontSize: 13,
+    fontWeight: 700, cursor: 'pointer', flexShrink: 0,
+  },
+  critiqueDismiss: {
+    background: 'none', border: 'none', color: '#B91C1C',
+    cursor: 'pointer', padding: '2px 4px', flexShrink: 0,
+    display: 'flex', alignItems: 'center',
+  },
+  layout:    { display: 'flex', minHeight: '100vh', background: '#F0F2F8' },
+  sidebar:   {
+    width: 260, background: Colors.white,
+    borderRight: `1px solid ${Colors.greyBorder}`,
+    display: 'flex', flexDirection: 'column',
+    position: 'sticky', top: 0, height: '100vh', flexShrink: 0,
+    boxShadow: '2px 0 12px rgba(0,0,0,0.04)',
+  },
+  sideTop:   { padding: '24px 18px 18px', borderBottom: `1px solid ${Colors.greyBorder}` },
+  logo:      { display: 'flex', alignItems: 'center', gap: 10, fontSize: 18, fontWeight: 800, color: Colors.primaryDark, marginBottom: 10 },
+  roleTag:   { display: 'inline-flex', alignItems: 'center', gap: 5, background: Colors.purpleLight, color: Colors.purple, borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 700 },
+  nav:       { flex: 1, padding: '10px 10px', display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' as const },
+  navItem:   { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: 'none', background: 'none', cursor: 'pointer', fontSize: 13.5, color: Colors.grey, fontWeight: 500, textAlign: 'left', width: '100%', transition: 'all 0.15s' },
+  navActive: { background: `linear-gradient(135deg, ${Colors.purple}15 0%, ${Colors.purple}08 100%)`, color: Colors.purple, fontWeight: 700, borderLeft: `3px solid ${Colors.purple}` },
+  navIcon:   { width: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  badge:     { marginLeft: 'auto', background: Colors.red, color: Colors.white, borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700, minWidth: 20, textAlign: 'center' },
   sideBottom:{ padding: '12px 10px', borderTop: `1px solid ${Colors.greyBorder}`, display: 'flex', flexDirection: 'column', gap: 8 },
   pendingAlert: { display: 'flex', alignItems: 'center', gap: 8, background: Colors.orangeLight, color: Colors.orange, borderRadius: 10, padding: '8px 12px', fontSize: 13, fontWeight: 600 },
   logoutBtn: { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 10, border: 'none', background: Colors.greyLight, color: Colors.grey, cursor: 'pointer', fontSize: 13, fontWeight: 600 },
@@ -2452,23 +2859,23 @@ const s: Record<string, React.CSSProperties> = {
   pageTitle: { fontSize: 24, fontWeight: 800, color: Colors.primaryDark, marginBottom: 4 },
   pageSubtitle: { fontSize: 14, color: Colors.grey },
   searchWrap:  { position: 'relative', display: 'flex', alignItems: 'center' },
-  searchIcon:  { position: 'absolute', left: 12, fontSize: 14, pointerEvents: 'none' },
-  searchInput: { border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 10, padding: '9px 14px 9px 36px', fontSize: 14, outline: 'none', width: 220, background: Colors.white, color: Colors.black },
-  statsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 },
+  searchIcon:  { position: 'absolute', left: 11, display: 'flex', alignItems: 'center', color: Colors.grey, pointerEvents: 'none' },
+  searchInput: { border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 10, padding: '9px 14px 9px 34px', fontSize: 14, outline: 'none', width: 220, background: Colors.white, color: Colors.black },
+  statsGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))', gap: 16 },
   periodeRow:  { display: 'flex', gap: 4, background: Colors.greyLight, borderRadius: 12, padding: 4 },
   periodePill: { border: 'none', background: 'none', borderRadius: 9, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: Colors.grey },
-  periodeActive: { background: Colors.white, color: Colors.purple, boxShadow: '0 1px 6px rgba(0,0,0,0.10)' },
+  periodeActive: { background: Colors.white, color: Colors.purple, boxShadow: '0 2px 8px rgba(83,74,183,0.15)' },
   chipsRow:  { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 },
   chip:      { display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 20, background: Colors.white, fontSize: 13, fontWeight: 600, color: Colors.grey, cursor: 'pointer' },
   chipClear: { padding: '6px 14px', border: 'none', borderRadius: 20, background: Colors.greyLight, fontSize: 12, fontWeight: 600, color: Colors.grey, cursor: 'pointer' },
-  list:      { display: 'flex', flexDirection: 'column', gap: 8 },
+  list:      { display: 'flex', flexDirection: 'column', gap: 10 },
   pagination:{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 28 },
   pageBtn:   { background: Colors.white, border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: Colors.primaryDark },
   pageBtnDisabled: { opacity: 0.4, cursor: 'not-allowed' },
   pageInfo:  { fontSize: 13, color: Colors.grey },
-  userCard:  { background: Colors.white, borderRadius: 14, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', border: `1px solid ${Colors.greyBorder}` },
+  userCard:  { background: Colors.white, borderRadius: 14, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.06)', border: `1px solid ${Colors.greyBorder}` },
   userCardTop: { borderColor: Colors.orange + '50', background: Colors.orangeLight + '40' },
-  userRank:  { width: 40, fontSize: 20, textAlign: 'center', flexShrink: 0 },
+  userRank:  { width: 40, fontSize: 18, textAlign: 'center', flexShrink: 0, fontWeight: 800 },
   userAvatar:{ width: 42, height: 42, borderRadius: 21, background: Colors.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: Colors.primaryDark, flexShrink: 0 },
   userInfo:  { flex: 1, minWidth: 0 },
   userName:  { fontSize: 15, fontWeight: 700, color: Colors.primaryDark },
@@ -2476,33 +2883,71 @@ const s: Record<string, React.CSSProperties> = {
   userRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 },
   userPts:   { fontSize: 15, fontWeight: 800, color: Colors.primaryDark },
   userNiv:   { fontSize: 12, color: Colors.grey, background: Colors.primaryLight, borderRadius: 20, padding: '2px 10px', fontWeight: 600 },
-  overlay:   { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', zIndex: 200 },
-  panel:     { background: Colors.white, width: 500, height: '100vh', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 32px rgba(0,0,0,0.14)' },
+  overlay:   {
+    position: 'fixed', inset: 0,
+    background: 'rgba(10, 15, 40, 0.45)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', zIndex: 200,
+  },
+  panel:     {
+    background: 'rgba(255,255,255,0.97)',
+    backdropFilter: 'blur(20px)',
+    width: 500, height: '100vh',
+    display: 'flex', flexDirection: 'column',
+    boxShadow: '-12px 0 48px rgba(0,0,0,0.18)',
+    borderLeft: '1px solid rgba(255,255,255,0.6)',
+  },
   panelHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '22px 28px', borderBottom: `1px solid ${Colors.greyBorder}` },
   panelTitle:  { fontSize: 18, fontWeight: 800, color: Colors.primaryDark },
   panelSubtitle: { fontSize: 13, color: Colors.grey, marginTop: 2 },
-  closeBtn:    { background: Colors.greyLight, border: 'none', borderRadius: 8, width: 34, height: 34, cursor: 'pointer', fontSize: 15, color: Colors.grey, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  closeBtn:    { background: Colors.greyLight, border: 'none', borderRadius: 8, width: 34, height: 34, cursor: 'pointer', color: Colors.grey, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   panelBody:   { flex: 1, overflowY: 'auto' as const, padding: '24px 28px' },
   panelFooter: { padding: '16px 28px', borderTop: `1px solid ${Colors.greyBorder}`, display: 'flex', gap: 10 },
-  createBtn: { background: Colors.purple, color: Colors.white, border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
-  formInput: { width: '100%', border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 10, padding: '10px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 10, background: Colors.white, color: Colors.black },
-  modal:     { background: Colors.white, borderRadius: 20, padding: '36px 32px', width: '100%', maxWidth: 460, boxShadow: '0 12px 48px rgba(0,0,0,0.20)' },
-  modalIcon: { width: 48, height: 48, borderRadius: 24, background: Colors.redLight, color: Colors.red, fontSize: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, fontWeight: 700 },
+  createBtn: {
+    display: 'flex', alignItems: 'center', gap: 7,
+    background: `linear-gradient(135deg, ${Colors.purple} 0%, #6C63D3 100%)`,
+    color: Colors.white, border: 'none', borderRadius: 12,
+    padding: '10px 20px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+    boxShadow: `0 4px 14px ${Colors.purple}40`,
+  },
+  formInput: {
+    width: '100%', border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 10,
+    padding: '10px 14px', fontSize: 14, outline: 'none',
+    boxSizing: 'border-box', marginBottom: 10,
+    background: '#FAFBFF', color: Colors.black,
+    transition: 'border-color 0.15s',
+  },
+  modal: {
+    background: 'rgba(255, 255, 255, 0.97)',
+    backdropFilter: 'blur(24px)',
+    WebkitBackdropFilter: 'blur(24px)',
+    border: '1px solid rgba(255,255,255,0.7)',
+    borderRadius: 24, padding: '36px 32px',
+    width: '100%', maxWidth: 460,
+    boxShadow: '0 24px 80px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.5)',
+  },
+  modalIcon: {
+    width: 52, height: 52, borderRadius: 16,
+    background: Colors.redLight, color: Colors.red,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    marginBottom: 18,
+  },
   modalTitle:{ fontSize: 20, fontWeight: 800, color: Colors.primaryDark, marginBottom: 8 },
-  modalDesc: { fontSize: 14, color: Colors.grey, marginBottom: 20 },
-  motifArea: { width: '100%', border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 10, padding: '12px 14px', fontSize: 14, resize: 'vertical' as const, outline: 'none', boxSizing: 'border-box' as const },
-  modalRow:  { display: 'flex', gap: 12, marginTop: 20 },
+  modalDesc: { fontSize: 14, color: Colors.grey, marginBottom: 20, lineHeight: 1.55 },
+  motifArea: { width: '100%', border: `1.5px solid ${Colors.greyBorder}`, borderRadius: 10, padding: '12px 14px', fontSize: 14, resize: 'vertical' as const, outline: 'none', boxSizing: 'border-box' as const, background: '#FAFBFF' },
+  modalRow:  { display: 'flex', gap: 12, marginTop: 22 },
 };
 
 const r: Record<string, React.CSSProperties> = {
-  card:      { background: Colors.white, borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 14, border: `1px solid ${Colors.greyBorder}` },
-  icon:      { fontSize: 20, width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  card:      { background: Colors.white, borderRadius: 16, padding: '16px 18px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', alignItems: 'center', gap: 14, border: `1px solid ${Colors.greyBorder}`, transition: 'box-shadow 0.15s' },
+  icon:      { width: 44, height: 44, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   info:      { flex: 1, minWidth: 0 },
   title:     { fontSize: 14, fontWeight: 700, color: Colors.primaryDark, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 300 },
   meta:      { fontSize: 12, color: Colors.grey, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   date:      { fontSize: 11, color: Colors.greyBorder, marginTop: 3 },
   actions:   { display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' },
-  detailBtn: { background: Colors.blueLight, color: Colors.blue, border: 'none', borderRadius: 8, padding: '7px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const },
+  detailBtn: { display: 'flex', alignItems: 'center', background: Colors.blueLight, color: Colors.blue, border: 'none', borderRadius: 9, padding: '7px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' as const, gap: 4 },
 };
 
 const d: Record<string, React.CSSProperties> = {
@@ -2521,13 +2966,13 @@ const d: Record<string, React.CSSProperties> = {
 };
 
 const sc: Record<string, React.CSSProperties> = {
-  card:    { background: Colors.white, borderRadius: 16, padding: '20px 22px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', border: `1px solid ${Colors.greyBorder}` },
-  iconWrap:{ width: 48, height: 48, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  card:    { background: Colors.white, borderRadius: 18, padding: '22px 22px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: `1px solid ${Colors.greyBorder}` },
+  iconWrap:{ width: 50, height: 50, borderRadius: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   icon:    { fontSize: 22 },
-  val:     { fontSize: 34, fontWeight: 800, color: Colors.primaryDark, marginBottom: 4 },
-  label:   { fontSize: 13, color: Colors.grey, marginBottom: 12 },
-  bar:     { height: 4, borderRadius: 2, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 2, minWidth: 4 },
+  val:     { fontSize: 36, fontWeight: 800, color: Colors.primaryDark, marginBottom: 4, letterSpacing: '-0.5px' },
+  label:   { fontSize: 12.5, color: Colors.grey, marginBottom: 14, lineHeight: 1.4 },
+  bar:     { height: 5, borderRadius: 3, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 3, minWidth: 4 },
 };
 
 const lb: Record<string, React.CSSProperties> = {

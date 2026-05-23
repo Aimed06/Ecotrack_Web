@@ -3,14 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { Colors } from '../../constants/colors';
 import { getEvenements, creerEvenement, getEvenementQRCode, updateProfilAssociation, getProfilAssociation, changerMotDePasseAssociation } from '../../api';
 import WILAYAS from '../../constants/wilayas';
+import {
+  MdCalendarToday, MdAddCircle, MdBusiness, MdLogout, MdQrCode,
+  MdCameraAlt, MdHourglassEmpty, MdCheckCircle, MdCancel, MdFlag,
+  MdLocationOn, MdAllInclusive, MdWarning, MdDownload, MdClose, MdLock,
+} from 'react-icons/md';
 
 type View = 'evenements' | 'creer' | 'profil';
 
-const STATUT_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-  en_attente: { label: 'En attente',  color: Colors.orange,  icon: '⏳' },
-  publie:     { label: 'Publié',       color: Colors.primary, icon: '✅' },
-  annule:     { label: 'Annulé',      color: Colors.red,     icon: '❌' },
-  termine:    { label: 'Terminé',     color: Colors.grey,    icon: '🏁' },
+const STATUT_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  en_attente: { label: 'En attente',  color: Colors.orange,  icon: <MdHourglassEmpty size={13} /> },
+  publie:     { label: 'Publié',       color: Colors.primary, icon: <MdCheckCircle size={13} /> },
+  annule:     { label: 'Annulé',      color: Colors.red,     icon: <MdCancel size={13} /> },
+  termine:    { label: 'Terminé',     color: Colors.grey,    icon: <MdFlag size={13} /> },
 };
 
 interface QRModal { evenement: any; qrCode: string }
@@ -37,6 +42,7 @@ export default function AssocDashboard() {
   const [nbPlaces, setNbPlaces] = useState('');
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
@@ -54,6 +60,7 @@ export default function AssocDashboard() {
   const [profilRemovedPhotos, setProfilRemovedPhotos] = useState<string[]>([]);
   const [profilNewPhotos, setProfilNewPhotos] = useState<File[]>([]);
   const [profilNewPhotosPreviews, setProfilNewPhotosPreviews] = useState<string[]>([]);
+  const [profilPhotosLoading, setProfilPhotosLoading] = useState(0);
   const [profilSaving, setProfilSaving] = useState(false);
   const [profilLoading, setProfilLoading] = useState(false);
   const [profilError, setProfilError] = useState('');
@@ -223,7 +230,7 @@ export default function AssocDashboard() {
     <div style={s.layout}>
       <aside style={s.sidebar}>
         <div style={s.sidebarTop}>
-          <div style={s.logo}>🌿 EcoTrack</div>
+          <div style={s.logo}>EcoTrack</div>
           <div style={s.roleTag}>Association</div>
 
           {/* Logo upload */}
@@ -237,10 +244,10 @@ export default function AssocDashboard() {
                 <img src={assoc.logo} alt="logo" style={s.logoImg} />
               ) : (
                 <div style={s.logoPlaceholder}>
-                  <span style={{ fontSize: 28 }}>{assoc.nom?.[0]?.toUpperCase() ?? '🏢'}</span>
+                  <span style={{ fontSize: 28, fontWeight: 800, color: Colors.primary }}>{assoc.nom?.[0]?.toUpperCase() ?? 'A'}</span>
                 </div>
               )}
-              <div style={s.logoOverlay}>{logoUploading ? '⏳' : '📷'}</div>
+              <div style={s.logoOverlay}>{logoUploading ? <MdHourglassEmpty size={16} /> : <MdCameraAlt size={16} />}</div>
             </div>
             {assoc.nom && <p style={s.assocName}>{assoc.nom}</p>}
             <input ref={logoInputRef} type="file" accept="image/*" style={{ display: 'none' }}
@@ -275,22 +282,24 @@ export default function AssocDashboard() {
 
         <nav style={s.nav}>
           {([
-            { id: 'evenements', label: 'Mes événements', icon: '📅', count: evenements.length },
-            { id: 'creer',      label: 'Créer un événement', icon: '➕', count: 0 },
-            { id: 'profil',     label: 'Mon profil', icon: '🏢', count: 0 },
-          ] as { id: View; label: string; icon: string; count: number }[]).map((item) => (
+            { id: 'evenements' as View, label: 'Mes événements', icon: <MdCalendarToday size={17} />, count: evenements.length },
+            { id: 'creer'      as View, label: 'Créer un événement', icon: <MdAddCircle size={17} />, count: 0 },
+            { id: 'profil'     as View, label: 'Mon profil', icon: <MdBusiness size={17} />, count: 0 },
+          ]).map((item) => (
             <button
               key={item.id}
               style={{ ...s.navItem, ...(view === item.id ? s.navItemActive : {}) }}
               onClick={() => setView(item.id)}
             >
-              <span>{item.icon}</span>
+              <span style={{ display: 'flex', alignItems: 'center' }}>{item.icon}</span>
               <span style={{ flex: 1 }}>{item.label}</span>
               {item.count > 0 && <span style={s.navCount}>{item.count}</span>}
             </button>
           ))}
         </nav>
-        <button style={s.logoutBtn} onClick={logout}>🚪 Déconnexion</button>
+        <button style={s.logoutBtn} onClick={logout}>
+          <MdLogout size={15} /> Déconnexion
+        </button>
       </aside>
 
       <main style={s.main}>
@@ -309,7 +318,7 @@ export default function AssocDashboard() {
 
             {!assocId ? (
               <div style={s.empty}>
-                <div style={{ fontSize: 40 }}>⚠️</div>
+                <div style={{ color: Colors.orange }}><MdWarning size={40} /></div>
                 <p style={{ fontSize: 15, color: Colors.grey }}>Impossible d'identifier votre association.</p>
                 <button style={s.emptyBtn} onClick={() => { localStorage.clear(); navigate('/assoc/login'); }}>
                   Se reconnecter
@@ -319,7 +328,7 @@ export default function AssocDashboard() {
               <div style={s.center}><div style={s.spinner} /></div>
             ) : !evenements.length ? (
               <div style={s.empty}>
-                <div style={{ fontSize: 48 }}>📅</div>
+                <div style={{ color: Colors.greyBorder }}><MdCalendarToday size={48} /></div>
                 <p style={{ fontSize: 15, color: Colors.grey }}>Aucun événement pour l'instant</p>
                 <button style={s.emptyBtn} onClick={() => setView('creer')}>Créer votre premier événement</button>
               </div>
@@ -338,7 +347,7 @@ export default function AssocDashboard() {
                           <img src={ev.photo} alt={ev.titre} style={s.cardPhoto} />
                         ) : (
                           <div style={{ ...s.cardPhotoPlaceholder, background: cfg.color + '18' }}>
-                            <span style={{ fontSize: 32 }}>📅</span>
+                            <span style={{ color: cfg.color }}><MdCalendarToday size={32} /></span>
                           </div>
                         )}
                         {/* Logo association flottant */}
@@ -369,12 +378,12 @@ export default function AssocDashboard() {
 
                         <div style={s.metaGroup}>
                           <div style={s.metaRow}>
-                            <span>📅</span>
+                            <MdCalendarToday size={14} color={Colors.grey} />
                             <span>{new Date(ev.date_debut).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
                           </div>
                           {ev.wilaya && (
                             <div style={s.metaRow}>
-                              <span>📍</span>
+                              <MdLocationOn size={14} color={Colors.grey} />
                               <span>{ev.wilaya}{ev.adresse ? ` — ${ev.adresse}` : ''}</span>
                             </div>
                           )}
@@ -413,7 +422,7 @@ export default function AssocDashboard() {
                             </div>
                           </div>
                         ) : (
-                          <p style={{ fontSize: 12, color: Colors.grey, marginTop: 4 }}>♾️ Places illimitées</p>
+                          <p style={{ fontSize: 12, color: Colors.grey, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><MdAllInclusive size={13} /> Places illimitées</p>
                         )}
 
                         {/* QR Code button */}
@@ -422,7 +431,7 @@ export default function AssocDashboard() {
                           onClick={() => openQR(ev)}
                           disabled={qrLoading === ev.id}
                         >
-                          {qrLoading === ev.id ? <>⏳ Génération...</> : <>📲 Afficher le QR Code</>}
+                          {qrLoading === ev.id ? <><MdHourglassEmpty size={16} /> Génération...</> : <><MdQrCode size={16} /> Afficher le QR Code</>}
                         </button>
 
                       </div>
@@ -461,15 +470,23 @@ export default function AssocDashboard() {
                       const file = e.target.files?.[0] ?? null;
                       setPhoto(file);
                       setPhotoPreview(file ? URL.createObjectURL(file) : null);
+                      if (file) setPhotoLoading(true);
                     }} />
                   {photoPreview ? (
                     <div style={{ position: 'relative' }}>
-                      <img src={photoPreview} alt="preview" style={s.photoPreview} />
+                      <img src={photoPreview} alt="preview" style={s.photoPreview}
+                        onLoad={() => setPhotoLoading(false)}
+                        onError={() => setPhotoLoading(false)} />
+                      {photoLoading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>Chargement…</span>
+                        </div>
+                      )}
                       <div style={s.photoChangeOverlay}>Changer la photo</div>
                     </div>
                   ) : (
                     <div style={s.photoPlaceholder}>
-                      <span style={{ fontSize: 32 }}>📷</span>
+                      <MdCameraAlt size={36} color={Colors.grey} />
                       <span style={{ fontSize: 13, color: Colors.grey, fontWeight: 600 }}>Cliquer pour ajouter une photo</span>
                       <span style={{ fontSize: 11, color: Colors.grey }}>JPEG, PNG, WebP — max 5 Mo</span>
                     </div>
@@ -511,8 +528,8 @@ export default function AssocDashboard() {
               {formError   && <div style={s.errorBox}>{formError}</div>}
               {formSuccess && <div style={s.successBox}>{formSuccess}</div>}
 
-              <button style={{ ...s.submitBtn, opacity: submitting ? 0.7 : 1 }} type="submit" disabled={submitting}>
-                {submitting ? 'Envoi en cours...' : 'Soumettre pour validation'}
+              <button style={{ ...s.submitBtn, opacity: (submitting || photoLoading) ? 0.7 : 1 }} type="submit" disabled={submitting || photoLoading}>
+                {submitting ? 'Envoi en cours...' : photoLoading ? 'Photo en cours de chargement…' : 'Soumettre pour validation'}
               </button>
             </form>
           </div>
@@ -545,11 +562,11 @@ export default function AssocDashboard() {
                     ) : (
                       <div style={s.profilLogoFallback}>
                         <span style={{ fontSize: 28, fontWeight: 800, color: Colors.primary }}>
-                          {profilNom?.[0]?.toUpperCase() ?? '🏢'}
+                          {profilNom?.[0]?.toUpperCase() ?? 'A'}
                         </span>
                       </div>
                     )}
-                    <div style={s.profilLogoOverlay}>📷 Changer</div>
+                    <div style={s.profilLogoOverlay}><MdCameraAlt size={14} style={{ marginRight: 3 }} />Changer</div>
                   </div>
                   <div>
                     <p style={{ fontSize: 13, fontWeight: 600, color: Colors.black, margin: 0 }}>
@@ -623,7 +640,9 @@ export default function AssocDashboard() {
                   ))}
                   {profilNewPhotosPreviews.map((url, i) => (
                     <div key={`n${i}`} style={{ position: 'relative' as const, width: 90, height: 90, borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
-                      <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' as const, opacity: 0.85 }} />
+                      <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' as const, opacity: 0.85 }}
+                        onLoad={() => setProfilPhotosLoading(c => Math.max(0, c - 1))}
+                        onError={() => setProfilPhotosLoading(c => Math.max(0, c - 1))} />
                       <div style={{ position: 'absolute' as const, bottom: 0, left: 0, right: 0, background: Colors.primary + 'CC', textAlign: 'center' as const, fontSize: 10, color: '#fff', padding: '2px 0' }}>Nouveau</div>
                       <button type="button"
                         style={{ position: 'absolute' as const, top: 4, right: 4, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', color: '#fff', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
@@ -634,6 +653,8 @@ export default function AssocDashboard() {
                     <input type="file" accept="image/*" multiple style={{ display: 'none' }}
                       onChange={e => {
                         const files = Array.from(e.target.files ?? []);
+                        if (files.length === 0) return;
+                        setProfilPhotosLoading(c => c + files.length);
                         setProfilNewPhotos(p => [...p, ...files]);
                         setProfilNewPhotosPreviews(p => [...p, ...files.map(f => URL.createObjectURL(f))]);
                         e.target.value = '';
@@ -648,15 +669,15 @@ export default function AssocDashboard() {
               {profilError   && <div style={s.errorBox}>{profilError}</div>}
               {profilSuccess && <div style={s.successBox}>{profilSuccess}</div>}
 
-              <button style={{ ...s.submitBtn, opacity: profilSaving ? 0.7 : 1 }} type="submit" disabled={profilSaving}>
-                {profilSaving ? 'Enregistrement...' : 'Enregistrer les modifications'}
+              <button style={{ ...s.submitBtn, opacity: (profilSaving || profilPhotosLoading > 0) ? 0.7 : 1 }} type="submit" disabled={profilSaving || profilPhotosLoading > 0}>
+                {profilPhotosLoading > 0 ? 'Photos en cours de chargement…' : profilSaving ? 'Enregistrement...' : 'Enregistrer les modifications'}
               </button>
             </form>
 
             {/* ── Changement de mot de passe ── */}
             <div style={s.mdpSection}>
               <div style={s.mdpHeader}>
-                <span style={{ fontSize: 16 }}>🔒</span>
+                <span style={{ color: Colors.grey, display: 'flex', alignItems: 'center' }}><MdLock size={18} /></span>
                 <div>
                   <p style={{ fontSize: 14, fontWeight: 700, color: Colors.primaryDark, margin: 0 }}>Changer le mot de passe</p>
                   <p style={{ fontSize: 12, color: Colors.grey, marginTop: 2 }}>Utilisez un mot de passe fort d'au moins 8 caractères.</p>
@@ -723,16 +744,16 @@ export default function AssocDashboard() {
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
             <div style={s.modalHeader}>
               <div>
-                <div style={s.modalTag}>📲 QR Code de présence</div>
+                <div style={s.modalTag}><MdQrCode size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />QR Code de présence</div>
                 <h3 style={s.modalTitle}>{qrModal.evenement.titre}</h3>
                 {qrModal.evenement.wilaya && (
-                  <p style={s.modalMeta}>📍 {qrModal.evenement.wilaya}{qrModal.evenement.adresse ? ` — ${qrModal.evenement.adresse}` : ''}</p>
+                  <p style={s.modalMeta}><MdLocationOn size={13} style={{ verticalAlign: 'middle', marginRight: 3 }} />{qrModal.evenement.wilaya}{qrModal.evenement.adresse ? ` — ${qrModal.evenement.adresse}` : ''}</p>
                 )}
                 <p style={s.modalMeta}>
-                  📅 {new Date(qrModal.evenement.date_debut).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  <MdCalendarToday size={13} style={{ verticalAlign: 'middle', marginRight: 3 }} />{new Date(qrModal.evenement.date_debut).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </p>
               </div>
-              <button style={s.closeBtn} onClick={() => setQrModal(null)}>✕</button>
+              <button style={s.closeBtn} onClick={() => setQrModal(null)}><MdClose size={16} /></button>
             </div>
 
             <div style={s.qrWrap}>
@@ -759,7 +780,7 @@ export default function AssocDashboard() {
               )}
               <div style={{ flex: 1 }} />
               <button style={s.downloadBtn} onClick={downloadQR}>
-                ⬇️ Télécharger le QR
+                <MdDownload size={15} style={{ verticalAlign: 'middle', marginRight: 5 }} />Télécharger le QR
               </button>
             </div>
           </div>
@@ -779,8 +800,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const s: Record<string, React.CSSProperties> = {
-  layout:     { display: 'flex', minHeight: '100vh', background: Colors.greyLight },
-  sidebar:    { width: 240, background: Colors.white, borderRight: `1px solid ${Colors.greyBorder}`, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', flexShrink: 0 },
+  layout:     { display: 'flex', minHeight: '100vh', background: '#F0F2F8' },
+  sidebar:    { width: 250, background: Colors.white, borderRight: `1px solid ${Colors.greyBorder}`, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', flexShrink: 0, boxShadow: '2px 0 12px rgba(0,0,0,0.04)' },
   sidebarTop: { padding: '24px 20px 16px', borderBottom: `1px solid ${Colors.greyBorder}` },
   logo:       { fontSize: 18, fontWeight: 800, color: Colors.primaryDark, marginBottom: 8 },
   roleTag:    { display: 'inline-block', background: Colors.primaryLight, color: Colors.primaryDark, borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 700 },
@@ -795,10 +816,10 @@ const s: Record<string, React.CSSProperties> = {
   sidebarStats: { display: 'flex', gap: 8, padding: '12px 16px', borderBottom: `1px solid ${Colors.greyBorder}` },
   statPill:   { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', background: Colors.greyLight, borderRadius: 10, padding: '8px 4px', gap: 2 },
   nav:        { flex: 1, padding: 12, display: 'flex', flexDirection: 'column', gap: 4 },
-  navItem:    { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: Colors.grey, fontWeight: 500, textAlign: 'left', width: '100%' },
-  navItemActive: { background: Colors.primaryLight, color: Colors.primaryDark, fontWeight: 700 },
+  navItem:    { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, border: 'none', background: 'none', cursor: 'pointer', fontSize: 13.5, color: Colors.grey, fontWeight: 500, textAlign: 'left', width: '100%', transition: 'all 0.15s' },
+  navItemActive: { background: `linear-gradient(135deg, ${Colors.primary}15 0%, ${Colors.primary}08 100%)`, color: Colors.primary, fontWeight: 700, borderLeft: `3px solid ${Colors.primary}` },
   navCount:   { background: Colors.primary, color: Colors.white, borderRadius: 10, padding: '1px 7px', fontSize: 11, fontWeight: 700 },
-  logoutBtn:  { margin: 12, padding: '10px 12px', borderRadius: 10, border: 'none', background: Colors.greyLight, color: Colors.grey, cursor: 'pointer', fontSize: 13 },
+  logoutBtn:  { margin: 12, padding: '10px 12px', borderRadius: 10, border: 'none', background: Colors.greyLight, color: Colors.grey, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 },
   main:       { flex: 1, padding: '32px 36px', overflowY: 'auto' as const },
   pageHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 },
   pageTitle:  { fontSize: 22, fontWeight: 800, color: Colors.primaryDark, marginBottom: 0 },
@@ -814,7 +835,7 @@ const s: Record<string, React.CSSProperties> = {
   cardPhotoPlaceholder: { height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   cardInner:  { padding: '26px 20px 20px', display: 'flex', flexDirection: 'column', gap: 10, flex: 1 },
   cardHead:   { display: 'flex', gap: 6, flexWrap: 'wrap' as const },
-  badge:      { borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 700 },
+  badge:      { borderRadius: 20, padding: '3px 10px', fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 },
   cardTitle:  { fontSize: 15, fontWeight: 700, color: Colors.primaryDark },
   cardDesc:   { fontSize: 13, color: Colors.grey, lineHeight: 1.5 },
   metaGroup:  { display: 'flex', flexDirection: 'column', gap: 5 },
@@ -853,13 +874,13 @@ const s: Record<string, React.CSSProperties> = {
   mdpHeader:  { display: 'flex', alignItems: 'flex-start', gap: 12 },
   mdpToggleBtn: { background: Colors.greyLight, border: 'none', borderRadius: 8, padding: '6px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: Colors.primaryDark, flexShrink: 0 },
 
-  overlay:    { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 },
-  modal:      { background: Colors.white, borderRadius: 20, width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.25)' },
+  overlay:    { position: 'fixed', inset: 0, background: 'rgba(10,15,40,0.45)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 },
+  modal:      { background: 'rgba(255,255,255,0.97)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.7)', borderRadius: 24, width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,0.22), 0 0 0 1px rgba(255,255,255,0.5)' },
   modalHeader:{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 24px 16px', borderBottom: `1px solid ${Colors.greyBorder}` },
   modalTag:   { fontSize: 11, fontWeight: 800, color: Colors.grey, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6 },
   modalTitle: { fontSize: 17, fontWeight: 800, color: Colors.primaryDark, lineHeight: 1.3, marginBottom: 4 },
   modalMeta:  { fontSize: 13, color: Colors.grey, marginTop: 2 },
-  closeBtn:   { background: Colors.greyLight, border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 14, color: Colors.grey, flexShrink: 0 },
+  closeBtn:   { background: Colors.greyLight, border: 'none', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: Colors.grey, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   qrWrap:     { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 24px 16px', gap: 16 },
   qrImg:      { width: 220, height: 220, borderRadius: 12, border: `3px solid ${Colors.greyBorder}` },
   qrHint:     { fontSize: 13, color: Colors.grey, textAlign: 'center', lineHeight: 1.6, maxWidth: 340 },

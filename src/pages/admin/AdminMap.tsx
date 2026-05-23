@@ -6,6 +6,12 @@ import { Colors } from '../../constants/colors';
 import { getSignalements, getPointsCollecte, getEvenements, modererSignalement, rejeterPhotosResolution } from '../../api';
 import WILAYAS from '../../constants/wilayas';
 import TYPES_DECHET from '../../constants/typesDechet';
+import {
+  MdWarning, MdRecycling, MdEvent, MdHandyman, MdCameraAlt, MdCheckCircle,
+  MdCheck, MdClose, MdLocationOn, MdHome, MdSchedule, MdBusiness,
+  MdCalendarToday, MdPerson, MdPeople,
+  MdLocalDrink, MdEco, MdWineBar, MdConstruction, MdDangerous,
+} from 'react-icons/md';
 
 // ── Fix leaflet default icon (Vite asset issue) ───────────────────────────────
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -36,9 +42,18 @@ const makeIcon = (color: string, symbol: string, size = 36) =>
 const DEGRE_COLORS = ['', '#22c55e', '#84cc16', Colors.orange, '#f97316', Colors.red];
 const DEGRE_LABELS = ['', 'Très léger', 'Léger', 'Modéré', 'Grave', 'Critique'];
 
+const DECHET_ICONS: Record<string, React.ReactNode> = {
+  'Plastique': <MdLocalDrink size={13} />,
+  'Organique': <MdEco size={13} />,
+  'Verre':     <MdWineBar size={13} />,
+  'Métal':     <MdConstruction size={13} />,
+  'Dangereux': <MdDangerous size={13} />,
+  'Autre':     <MdRecycling size={13} />,
+};
+
 const signalIcon = (deg: number) => makeIcon(DEGRE_COLORS[deg] ?? Colors.orange, '⚠');
 const pointIcon  = makeIcon(Colors.primary, '♻');
-const eventIcon  = makeIcon(Colors.purple,  '📅', 32);
+const eventIcon  = makeIcon(Colors.purple,  '★', 32);
 
 // ── Fit bounds helper ─────────────────────────────────────────────────────────
 function FitBounds({ points }: { points: [number, number][] }) {
@@ -68,10 +83,10 @@ function FlyToWilaya({ wilaya }: { wilaya: string | null }) {
 // ── Layer toggle types ────────────────────────────────────────────────────────
 type LayerKey = 'signalements' | 'points' | 'evenements';
 
-const LAYERS: { key: LayerKey; label: string; color: string; icon: string }[] = [
-  { key: 'signalements', label: 'Signalements', color: Colors.orange,  icon: '⚠️' },
-  { key: 'points',       label: 'Points de collecte', color: Colors.primary, icon: '♻️' },
-  { key: 'evenements',   label: 'Événements',   color: Colors.purple,  icon: '📅' },
+const LAYERS: { key: LayerKey; label: string; color: string; icon: React.ReactNode }[] = [
+  { key: 'signalements', label: 'Signalements',       color: Colors.orange,  icon: <MdWarning size={15} /> },
+  { key: 'points',       label: 'Points de collecte', color: Colors.primary, icon: <MdRecycling size={15} /> },
+  { key: 'evenements',   label: 'Événements',         color: Colors.purple,  icon: <MdEvent size={15} /> },
 ];
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -109,7 +124,13 @@ export default function AdminMap() {
   const toggleLayer = (key: LayerKey) => {
     setActiveLayers(prev => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) {
+        next.delete(key);
+        if (key === 'points')       setTypeFilter([]);
+        if (key === 'signalements') { setDegreFilter([]); setPhotosResoluOnly(false); }
+      } else {
+        next.add(key);
+      }
       return next;
     });
   };
@@ -191,42 +212,46 @@ export default function AdminMap() {
           </select>
         </div>
 
-        <div style={ms.typeWrap}>
-          <p style={ms.controlTitle}>Type de déchets ♻️</p>
-          <div style={ms.typeChips}>
-            {TYPES_DECHET.map(t => {
-              const active = typeFilter.includes(t.value);
-              return (
-                <button
-                  key={t.value}
-                  style={{ ...ms.typeChip, ...(active ? { borderColor: t.color, background: t.color + '15', color: t.color } : {}) }}
-                  onClick={() => toggleType(t.value)}
-                >
-                  {t.icon} {t.value}
-                </button>
-              );
-            })}
-            {typeFilter.length > 0 && (
-              <button style={ms.typeChipClear} onClick={() => setTypeFilter([])}>✕</button>
-            )}
+        {activeLayers.has('points') && (
+          <div style={ms.typeWrap}>
+            <p style={{ ...ms.controlTitle, display: 'flex', alignItems: 'center', gap: 5 }}><MdRecycling size={14} /> Type de déchets</p>
+            <div style={ms.typeChips}>
+              {TYPES_DECHET.map(t => {
+                const active = typeFilter.includes(t.value);
+                return (
+                  <button
+                    key={t.value}
+                    style={{ ...ms.typeChip, ...(active ? { borderColor: t.color, background: t.color + '15', color: t.color } : {}) }}
+                    onClick={() => toggleType(t.value)}
+                  >
+                    <span style={{ display: 'flex', alignItems: 'center' }}>{DECHET_ICONS[t.value]}</span> {t.value}
+                  </button>
+                );
+              })}
+              {typeFilter.length > 0 && (
+                <button style={ms.typeChipClear} onClick={() => setTypeFilter([])}>✕</button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div style={ms.typeWrap}>
-          <p style={ms.controlTitle}>À résoudre 🔧</p>
-          <button
-            style={{ ...ms.typeChip, ...(photosResoluOnly ? { borderColor: Colors.primary, background: Colors.primaryLight, color: Colors.primary, fontWeight: 700 } : {}) }}
-            onClick={() => setPhotosResoluOnly(v => !v)}
-          >
-            📷 Avec photos de résolution
-            {photosResoluOnly && <span style={{ marginLeft: 4 }}>✓</span>}
-          </button>
-        </div>
+        {activeLayers.has('signalements') && (
+          <>
+            <div style={ms.typeWrap}>
+              <p style={{ ...ms.controlTitle, display: 'flex', alignItems: 'center', gap: 5 }}><MdHandyman size={14} /> À résoudre</p>
+              <button
+                style={{ ...ms.typeChip, ...(photosResoluOnly ? { borderColor: Colors.primary, background: Colors.primaryLight, color: Colors.primary, fontWeight: 700 } : {}) }}
+                onClick={() => setPhotosResoluOnly(v => !v)}
+              >
+                <MdCameraAlt size={14} /> Avec photos de résolution
+                {photosResoluOnly && <MdCheck size={14} style={{ marginLeft: 4 }} />}
+              </button>
+            </div>
 
-        <div style={ms.legend}>
-          <p style={ms.controlTitle}>Degré de pollution ⚠️</p>
-          <div style={ms.legendItems}>
-            {[1,2,3,4,5].map(d => {
+            <div style={ms.legend}>
+              <p style={{ ...ms.controlTitle, display: 'flex', alignItems: 'center', gap: 5 }}><MdWarning size={14} /> Degré de pollution</p>
+              <div style={ms.legendItems}>
+                {[1,2,3,4,5].map(d => {
               const active = degreFilter.includes(d);
               return (
                 <button
@@ -239,11 +264,13 @@ export default function AdminMap() {
                 </button>
               );
             })}
-            {degreFilter.length > 0 && (
-              <button style={ms.typeChipClear} onClick={() => setDegreFilter([])}>✕</button>
-            )}
-          </div>
-        </div>
+                {degreFilter.length > 0 && (
+                  <button style={ms.typeChipClear} onClick={() => setDegreFilter([])}>✕</button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Map ── */}
@@ -288,7 +315,7 @@ export default function AdminMap() {
               <Popup maxWidth={300}>
                 <div style={mp.popup}>
                   <div style={{ ...mp.header, background: Colors.primary }}>
-                    <span style={mp.headerIcon}>♻️</span>
+                    <span style={mp.headerIcon}><MdRecycling size={16} /></span>
                     <span style={mp.headerLabel}>Point de collecte</span>
                     <span style={mp.headerId}>#{p.id}</span>
                   </div>
@@ -298,19 +325,19 @@ export default function AdminMap() {
                     <div style={mp.metaGrid}>
                       {p.wilaya && (
                         <div style={mp.metaItem}>
-                          <span style={mp.metaIcon}>📍</span>
+                          <span style={mp.metaIcon}><MdLocationOn size={13} /></span>
                           <span style={mp.metaText}>{p.wilaya}</span>
                         </div>
                       )}
                       {p.adresse && (
                         <div style={mp.metaItem}>
-                          <span style={mp.metaIcon}>🏠</span>
+                          <span style={mp.metaIcon}><MdHome size={13} /></span>
                           <span style={mp.metaText}>{p.adresse}</span>
                         </div>
                       )}
                       {p.horaires && (
                         <div style={mp.metaItem}>
-                          <span style={mp.metaIcon}>🕐</span>
+                          <span style={mp.metaIcon}><MdSchedule size={13} /></span>
                           <span style={mp.metaText}>{p.horaires}</span>
                         </div>
                       )}
@@ -341,7 +368,7 @@ export default function AdminMap() {
               <Popup maxWidth={300}>
                 <div style={mp.popup}>
                   <div style={{ ...mp.header, background: Colors.purple }}>
-                    <span style={mp.headerIcon}>📅</span>
+                    <span style={mp.headerIcon}><MdEvent size={16} /></span>
                     <span style={mp.headerLabel}>Événement</span>
                     <span style={mp.headerId}>#{e.id}</span>
                   </div>
@@ -351,18 +378,18 @@ export default function AdminMap() {
                     <div style={mp.metaGrid}>
                       {e.wilaya && (
                         <div style={mp.metaItem}>
-                          <span style={mp.metaIcon}>📍</span>
+                          <span style={mp.metaIcon}><MdLocationOn size={13} /></span>
                           <span style={mp.metaText}>{e.wilaya}</span>
                         </div>
                       )}
                       {e.association?.nom && (
                         <div style={mp.metaItem}>
-                          <span style={mp.metaIcon}>🏢</span>
+                          <span style={mp.metaIcon}><MdBusiness size={13} /></span>
                           <span style={mp.metaText}>{e.association.nom}</span>
                         </div>
                       )}
                       <div style={mp.metaItem}>
-                        <span style={mp.metaIcon}>🗓</span>
+                        <span style={mp.metaIcon}><MdCalendarToday size={13} /></span>
                         <span style={mp.metaText}>{new Date(e.date_debut).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       </div>
                     </div>
@@ -425,7 +452,7 @@ function SignalementPopup({ s, onResolu, onPhotosCleared }: { s: any; onResolu: 
   return (
     <div style={mp.popup}>
       <div style={{ ...mp.header, background: color }}>
-        <span style={mp.headerIcon}>⚠️</span>
+        <span style={mp.headerIcon}><MdWarning size={16} /></span>
         <span style={mp.headerLabel}>Signalement</span>
         <span style={mp.headerId}>#{s.id}</span>
       </div>
@@ -448,23 +475,23 @@ function SignalementPopup({ s, onResolu, onPhotosCleared }: { s: any; onResolu: 
         <div style={mp.metaGrid}>
           {s.wilaya && (
             <div style={mp.metaItem}>
-              <span style={mp.metaIcon}>📍</span>
+              <span style={mp.metaIcon}><MdLocationOn size={13} /></span>
               <span style={mp.metaText}>{s.wilaya}{s.commune ? `, ${s.commune}` : ''}</span>
             </div>
           )}
           {s.citoyen && (
             <div style={mp.metaItem}>
-              <span style={mp.metaIcon}>👤</span>
+              <span style={mp.metaIcon}><MdPerson size={13} /></span>
               <span style={mp.metaText}>{s.citoyen.prenom} {s.citoyen.nom}</span>
             </div>
           )}
           <div style={mp.metaItem}>
-            <span style={mp.metaIcon}>🗓</span>
+            <span style={mp.metaIcon}><MdCalendarToday size={13} /></span>
             <span style={mp.metaText}>{new Date(s.created_at).toLocaleDateString('fr-DZ', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
           </div>
           {(s.confirmations_count ?? 0) > 0 && (
             <div style={mp.metaItem}>
-              <span style={mp.metaIcon}>👥</span>
+              <span style={mp.metaIcon}><MdPeople size={13} /></span>
               <span style={{ ...mp.metaText, color: Colors.primary, fontWeight: 600 }}>
                 {s.confirmations_count} citoyen{s.confirmations_count > 1 ? 's' : ''} ont confirmé
               </span>
@@ -476,7 +503,7 @@ function SignalementPopup({ s, onResolu, onPhotosCleared }: { s: any; onResolu: 
         {photosAvant.length > 0 && (
           <>
             <div style={mp.divider} />
-            <p style={mp.photoSectionLabel}>📸 Avant</p>
+            <p style={{ ...mp.photoSectionLabel, display: 'flex', alignItems: 'center', gap: 4 }}><MdCameraAlt size={13} /> Avant</p>
             <div style={mp.thumbRow}>
               {photosAvant.slice(0, 3).map((url: string, i: number) => (
                 <a key={i} href={url} target="_blank" rel="noreferrer">
@@ -494,7 +521,7 @@ function SignalementPopup({ s, onResolu, onPhotosCleared }: { s: any; onResolu: 
         {photosApres.length > 0 && (
           <>
             <div style={mp.divider} />
-            <p style={{ ...mp.photoSectionLabel, color: Colors.primary }}>✅ Après nettoyage</p>
+            <p style={{ ...mp.photoSectionLabel, color: Colors.primary, display: 'flex', alignItems: 'center', gap: 4 }}><MdCheckCircle size={13} /> Après nettoyage</p>
             <div style={mp.thumbRow}>
               {photosApres.slice(0, 3).map((url: string, i: number) => (
                 <a key={i} href={url} target="_blank" rel="noreferrer">
@@ -516,7 +543,7 @@ function SignalementPopup({ s, onResolu, onPhotosCleared }: { s: any; onResolu: 
             disabled={!!busy}
             onClick={handleResolu}
           >
-            {busy === 'resolu' ? '...' : '✓ Résolu'}
+            {busy === 'resolu' ? '...' : <><MdCheck size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} />Résolu</>}
           </button>
           {photosApres.length > 0 && (
             <button
@@ -524,7 +551,7 @@ function SignalementPopup({ s, onResolu, onPhotosCleared }: { s: any; onResolu: 
               disabled={!!busy}
               onClick={handleRejetePhotos}
             >
-              {busy === 'rejete' ? '...' : '✕ Rejeter photos'}
+              {busy === 'rejete' ? '...' : <><MdClose size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} />Rejeter photos</>}
             </button>
           )}
         </div>
