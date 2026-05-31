@@ -37,7 +37,7 @@ export const supprimerEvenementAdmin = (id: number) =>
   api.delete(`/admin/evenements/${id}`);
 export const getConfigPoints = () =>
   api.get('/admin/config');
-export const updateConfigPoints = (data: { points_signalement?: number; points_signalement_critique?: number; points_participation?: number }) =>
+export const updateConfigPoints = (data: { points_signalement?: number; points_signalement_critique?: number; points_participation?: number; points_proposition_point?: number }) =>
   api.patch('/admin/config', data);
 export const modererSignalement = (id: number, statut: 'publie' | 'rejete' | 'resolu', motif_rejet?: string) =>
   api.patch(`/signalements/${id}/statut`, { statut, ...(motif_rejet ? { motif_rejet } : {}) });
@@ -80,11 +80,11 @@ export const getPointsAdmin = (page = 1, limit = 10, filters: { wilaya?: string;
 export const creerPointCollecte = (data: {
   nom: string; wilaya: string; type_dechet: string[];
   latitude: number; longitude: number;
-  adresse?: string; horaires?: string; description?: string;
+  adresse?: string; horaires?: string;
 }) => api.post('/points-collecte', data);
 export const supprimerPointCollecteAdmin = (id: number) =>
   api.delete(`/admin/points-collecte/${id}`);
-export const modifierPointCollecteAdmin = (id: number, data: { nom?: string; wilaya?: string; adresse?: string; horaires?: string; description?: string; type_dechet?: string[] }) =>
+export const modifierPointCollecteAdmin = (id: number, data: { nom?: string; wilaya?: string; adresse?: string; horaires?: string; type_dechet?: string[]; statut?: string }) =>
   api.patch(`/admin/points-collecte/${id}`, data);
 
 // Utilisateurs
@@ -127,5 +127,8 @@ export const supprimerCollecte = (id: number) =>
 
 export const notifierTop20 = () =>
   api.post('/admin/notifier-top20');
+
+export const getSignalementsCritiques = (since?: string) =>
+  api.get('/admin/signalements/critiques', { params: since ? { since } : {} });
 
 export default api;

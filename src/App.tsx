@@ -4,12 +4,17 @@ import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AssocLogin from './pages/association/AssocLogin';
 import AssocDashboard from './pages/association/AssocDashboard';
+import AccessDenied from './pages/errors/AccessDenied';
+import NotFound from './pages/errors/NotFound';
 
 function RequireAuth({ role, children }: { role: 'admin' | 'association'; children: React.ReactNode }) {
   const storedRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
-  if (!token || storedRole !== role) {
-    return <Navigate to={role === 'admin' ? '/admin/login' : '/assoc/login'} replace />;
+  if (!token) {
+    return <AccessDenied reason="unauthenticated" role={role} />;
+  }
+  if (storedRole !== role) {
+    return <AccessDenied reason="forbidden" role={role} />;
   }
   return <>{children}</>;
 }
@@ -27,7 +32,7 @@ export default function App() {
         <Route path="/assoc" element={
           <RequireAuth role="association"><AssocDashboard /></RequireAuth>
         } />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   );

@@ -1,21 +1,28 @@
 export const Colors = {
-  primary: '#1D9E75',
-  primaryDark: '#085041',
-  primaryMedium: '#0F6E56',
-  primaryLight: '#E1F5EE',
-  primaryAccent: '#9FE1CB',
-  orange: '#EF9F27',
-  orangeLight: '#FEF3D7',
-  red: '#E24B4A',
-  redLight: '#FEE2E2',
-  purple: '#534AB7',
-  purpleLight: '#EEEDFB',
-  blue: '#378ADD',
-  blueLight: '#E6F1FB',
-  white: '#FFFFFF',
-  black: '#1A1A1A',
-  grey: '#6B7280',
-  greyLight: '#F3F4F6',
-  greyBorder: '#E5E7EB',
-  greenLight: '#D1FAE5',
+  // Green
+  primary:           '#00C48C',
+  primaryDark:       '#005C42',
+  primaryMedium:     '#00967A',
+  primaryLight:      '#DCFDF3',
+  primaryAccent:     '#6EE7C0',
+
+  // Status
+  orange:            '#F97316',
+  orangeLight:       '#FFF3E0',
+  red:               '#EF4444',
+  redLight:          '#FEE2E2',
+
+  // Accent
+  purple:            '#7C3AED',
+  purpleLight:       '#EDE9FE',
+  blue:              '#3B82F6',
+  blueLight:         '#EFF6FF',
+
+  // Neutral
+  white:             '#FFFFFF',
+  black:             '#0F172A',
+  grey:              '#64748B',
+  greyLight:         '#F8FAFC',
+  greyBorder:        '#E2E8F0',
+  greenLight:        '#D1FAE5',
 };
