@@ -30,10 +30,12 @@ import {
   getCamions, creerCamion, modifierCamion, supprimerCamion,
   getCollectes, creerCollecte, modifierStatutCollecte, supprimerCollecte,
   getConfigPoints, updateConfigPoints, notifierTop20, getSignalementsCritiques,
+  getTopCitoyens, envoyerCartesCadeaux,
 } from '../../api';
 import AdminMap from './AdminMap';
 import WILAYAS from '../../constants/wilayas';
 import TYPES_DECHET from '../../constants/typesDechet';
+import { useViewport } from '../../hooks/useViewport';
 import {
   MdSpaceDashboard, MdMap, MdBusiness, MdEvent, MdReportProblem,
   MdLocationOn, MdPeople, MdEngineering, MdLocalShipping, MdAssignment,
@@ -44,6 +46,7 @@ import {
   MdRecycling, MdHandyman, MdHourglassEmpty, MdCameraAlt,
   MdLocalDrink, MdEco, MdWineBar, MdConstruction, MdDangerous,
   MdSave, MdEmojiEvents, MdOutlineAddLocationAlt,
+  MdMenu,
 } from 'react-icons/md';
 
 type Tab = 'stats' | 'associations' | 'evenements' | 'signalements' | 'points' | 'utilisateurs' | 'carte' | 'employes' | 'camions' | 'collectes' | 'config';
@@ -105,6 +108,8 @@ const DECHET_ICONS: Record<string, React.ReactNode> = {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { isMobile } = useViewport();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'stats');
   const [stats, setStats]     = useState<Stats | null>(null);
@@ -217,6 +222,15 @@ export default function AdminDashboard() {
   const [top20Msg, setTop20Msg]     = useState('');
   const [top20Err, setTop20Err]     = useState('');
 
+  // Cartes cadeaux
+  const [cardN, setCardN] = useState(20);
+  const [cardTop, setCardTop] = useState<any[]>([]);
+  const [cardCodes, setCardCodes] = useState<Record<number, string>>({});
+  const [cardLoading, setCardLoading] = useState(false);
+  const [cardSending, setCardSending] = useState(false);
+  const [cardMsg, setCardMsg] = useState('');
+  const [cardErr, setCardErr] = useState('');
+
   const loadConfig = async () => {
     try {
       const res = await getConfigPoints();
@@ -243,6 +257,36 @@ export default function AdminDashboard() {
     finally { setTop20Loading(false); }
   };
 
+  const handleLoadTopCitoyens = async () => {
+    setCardLoading(true); setCardMsg(''); setCardErr('');
+    try {
+      const n = Math.max(1, Math.min(parseInt(String(cardN), 10) || 20, 200));
+      const res = await getTopCitoyens(n);
+      setCardTop(res.data.data ?? []);
+      setCardCodes({});
+    } catch { setCardErr('Erreur lors du chargement du top.'); }
+    finally { setCardLoading(false); }
+  };
+
+  const handleEnvoyerCartesCadeaux = async () => {
+    setCardSending(true); setCardMsg(''); setCardErr('');
+    try {
+      const codes = cardTop
+        .map((u, i) => ({ utilisateur_id: u.id, code: (cardCodes[u.id] ?? '').trim(), rang: i + 1 }))
+        .filter(c => c.code);
+      if (codes.length === 0) {
+        setCardErr('Aucun code saisi.');
+        setCardSending(false);
+        return;
+      }
+      const res = await envoyerCartesCadeaux(codes);
+      setCardMsg(res.data.message || `${codes.length} carte(s) cadeau envoyée(s).`);
+      setCardCodes({});
+    } catch (e: any) {
+      setCardErr(e?.response?.data?.error || 'Erreur lors de l\'envoi des cartes cadeaux.');
+    } finally { setCardSending(false); }
+  };
+
   const [signalMode, setSignalMode] = useState<'moderation' | 'a_resoudre'>('moderation');
   const [resoudreItems, setResoudreItems] = useState<any[]>([]);
   const [resoudreLoading, setResoudreLoading] = useState(false);
@@ -250,8 +294,6 @@ export default function AdminDashboard() {
 
   const toggleType  = (v: string) =>
     setTypeFilter(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
-  const toggleDegre = (d: number) =>
-    setDegreFilter(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
 
   const JOURS_ORDER = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
   const computeHoraires = (b: typeof horairesBuilder) => {
@@ -572,10 +614,43 @@ export default function AdminDashboard() {
     return items;
   };
 
+  // Styles dérivés mobile
+  const layoutS = isMobile ? { ...s.layout, flexDirection: 'column' as const } : s.layout;
+  const mainS = isMobile ? { ...s.main, padding: 16, maxWidth: '100%', width: '100%' } : s.main;
+  const pageHeaderS = isMobile
+    ? { ...s.pageHeader, flexDirection: 'column' as const, alignItems: 'stretch' as const, gap: 12 }
+    : s.pageHeader;
+  const searchInputS = isMobile ? { ...s.searchInput, width: '100%' } : s.searchInput;
+  const panelS = isMobile ? { ...s.panel, width: '100%', height: '100vh', maxWidth: '100%' } : s.panel;
+  const sidebarS = {
+    ...s.sidebar,
+    ...(isMobile ? {
+      position: 'fixed' as const, top: 0, left: 0, bottom: 0,
+      height: '100vh', width: 280, maxWidth: '85vw',
+      transform: drawerOpen ? 'translateX(0)' : 'translateX(-100%)',
+      transition: 'transform 0.28s ease',
+      zIndex: 1100,
+      boxShadow: '0 0 40px rgba(0,0,0,0.18)',
+    } : {}),
+  };
+
   return (
-    <div style={s.layout}>
+    <div style={layoutS}>
+      {isMobile && (
+        <header style={sMobile.header}>
+          <button style={sMobile.hamburger} onClick={() => setDrawerOpen(true)} aria-label="Menu">
+            <MdMenu size={22} />
+          </button>
+          <div style={sMobile.headerTitle}>EcoTrack — Admin</div>
+          <div style={{ width: 40, flexShrink: 0 }} />
+        </header>
+      )}
+      {isMobile && drawerOpen && (
+        <div style={sMobile.backdrop} onClick={() => setDrawerOpen(false)} />
+      )}
+
       {/* ── Sidebar ── */}
-      <aside style={s.sidebar}>
+      <aside style={sidebarS}>
         <div style={s.sideTop}>
           <div style={s.logo}>
             <span style={{ fontSize: 22 }}>🌿</span>
@@ -609,6 +684,7 @@ export default function AdminDashboard() {
                     if (MODERATION_TABS.includes(t.id)) { setModPage(1); loadModTab(t.id, 1); }
                     if (t.id === 'evenements') { setEvPage(1); loadEvenements(1); }
                     if (t.id === 'config') loadConfig();
+                    if (isMobile) setDrawerOpen(false);
                   }}
                 >
                   <span style={s.navIcon}>{TAB_ICONS[t.id]}</span>
@@ -633,7 +709,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* ── Main ── */}
-      <main style={s.main}>
+      <main style={mainS}>
         {newCritiques.length > 0 && (
           <div style={s.critiqueBanner}>
             <MdCrisisAlert size={22} />
@@ -658,7 +734,7 @@ export default function AdminDashboard() {
             {/* ── Carte ── */}
             {tab === 'carte' && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Carte interactive</h2>
                     <p style={s.pageSubtitle}>Signalements, points de collecte et événements géolocalisés</p>
@@ -671,7 +747,7 @@ export default function AdminDashboard() {
             {/* ── Stats ── */}
             {tab === 'stats' && stats && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Tableau de bord</h2>
                     <p style={s.pageSubtitle}>Vue d'ensemble de la plateforme</p>
@@ -716,7 +792,7 @@ export default function AdminDashboard() {
             {/* ── Associations ── */}
             {tab === 'associations' && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Associations</h2>
                     <p style={s.pageSubtitle}>{assocTotal} association{assocTotal !== 1 ? 's' : ''}</p>
@@ -762,7 +838,7 @@ export default function AdminDashboard() {
             {/* ── Points de collecte ── */}
             {tab === 'points' && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Points de collecte</h2>
                     <p style={s.pageSubtitle}>
@@ -836,19 +912,19 @@ export default function AdminDashboard() {
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 20, alignItems: 'center' }}>
                       <div style={{ ...s.searchWrap, minWidth: 220 }}>
                         <span style={s.searchIcon}><MdSearch size={16} /></span>
-                        <input style={s.searchInput} placeholder="Rechercher nom, adresse..." value={pointsSearch} onChange={e => setPointsSearch(e.target.value)} />
+                        <input style={searchInputS} placeholder="Rechercher nom, adresse..." value={pointsSearch} onChange={e => setPointsSearch(e.target.value)} />
                         {pointsSearch && <button onClick={() => setPointsSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: Colors.grey, display: 'flex', alignItems: 'center' }}><MdClose size={15} /></button>}
                       </div>
                       <div style={s.searchWrap}>
                         <span style={s.searchIcon}><MdLocationOn size={16} /></span>
-                        <select style={s.searchInput} value={pointsWilaya} onChange={e => setPointsWilaya(e.target.value)}>
+                        <select style={searchInputS} value={pointsWilaya} onChange={e => setPointsWilaya(e.target.value)}>
                           <option value="">Toutes les wilayas</option>
                           {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
                         </select>
                       </div>
                       <div style={s.searchWrap}>
                         <span style={s.searchIcon}><MdFilterList size={16} /></span>
-                        <select style={s.searchInput} value={pointsStatut} onChange={e => setPointsStatut(e.target.value)}>
+                        <select style={searchInputS} value={pointsStatut} onChange={e => setPointsStatut(e.target.value)}>
                           <option value="">Tous les statuts</option>
                           <option value="actif">Actif</option>
                           <option value="inactif">Inactif</option>
@@ -856,7 +932,7 @@ export default function AdminDashboard() {
                       </div>
                       <div style={s.searchWrap}>
                         <span style={s.searchIcon}><MdRecycling size={16} /></span>
-                        <select style={s.searchInput} value={pointsTypeFilter} onChange={e => setPointsTypeFilter(e.target.value)}>
+                        <select style={searchInputS} value={pointsTypeFilter} onChange={e => setPointsTypeFilter(e.target.value)}>
                           <option value="">Tous les types</option>
                           {TYPES_DECHET.map(t => <option key={t.value} value={t.value}>{t.icon} {t.value}</option>)}
                         </select>
@@ -918,7 +994,7 @@ export default function AdminDashboard() {
             {/* ── Moderation lists ── */}
             {MODERATION_TABS.includes(tab) && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>{TABS.find(t => t.id === tab)?.label}</h2>
                     <p style={s.pageSubtitle}>
@@ -929,17 +1005,32 @@ export default function AdminDashboard() {
                     {tab === 'signalements' && (
                       <div style={{ ...s.searchWrap, minWidth: 220 }}>
                         <span style={s.searchIcon}><MdSearch size={16} /></span>
-                        <input style={s.searchInput} placeholder="Rechercher titre, description..." value={signalSearch} onChange={e => setSignalSearch(e.target.value)} />
+                        <input style={searchInputS} placeholder="Rechercher titre, description..." value={signalSearch} onChange={e => setSignalSearch(e.target.value)} />
                         {signalSearch && <button onClick={() => setSignalSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: Colors.grey, fontSize: 14, padding: '0 4px' }}>✕</button>}
                       </div>
                     )}
                     <div style={s.searchWrap}>
                       <span style={s.searchIcon}><MdLocationOn size={16} /></span>
-                      <select style={s.searchInput} value={wilayaFilter} onChange={(e) => setWilayaFilter(e.target.value)}>
+                      <select style={searchInputS} value={wilayaFilter} onChange={(e) => setWilayaFilter(e.target.value)}>
                         <option value=''>Toutes les wilayas</option>
                         {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
                       </select>
                     </div>
+                    {tab === 'signalements' && (
+                      <div style={s.searchWrap}>
+                        <span style={s.searchIcon}><MdWarning size={16} /></span>
+                        <select
+                          style={searchInputS}
+                          value={degreFilter[0] ?? ''}
+                          onChange={e => setDegreFilter(e.target.value ? [parseInt(e.target.value, 10)] : [])}
+                        >
+                          <option value=''>Tous les degrés</option>
+                          {[1,2,3,4,5].map(d => (
+                            <option key={d} value={d}>{d} — {DEGRE_LABELS[d]}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -956,23 +1047,6 @@ export default function AdminDashboard() {
                           onClick={() => { setSignalMode(mode as typeof signalMode); setDegreFilter([]); setPhotoResFilter(false); }}
                         >{icon}{label}</button>
                       ))}
-                    </div>
-                    <div style={s.chipsRow}>
-                      {[1,2,3,4,5].map(d => {
-                        const active = degreFilter.includes(d);
-                        return (
-                          <button key={d}
-                            style={{ ...s.chip, ...(active ? { borderColor: DEGRE_COLORS[d], background: DEGRE_BG[d], color: DEGRE_COLORS[d] } : {}) }}
-                            onClick={() => toggleDegre(d)}
-                          >
-                            <span style={{ width: 10, height: 10, borderRadius: '50%', background: DEGRE_COLORS[d], display: 'inline-block', flexShrink: 0 }} />
-                            <span>{d} — {DEGRE_LABELS[d]}</span>
-                          </button>
-                        );
-                      })}
-                      {degreFilter.length > 0 && (
-                        <button style={s.chipClear} onClick={() => setDegreFilter([])}>✕ Effacer</button>
-                      )}
                     </div>
                     {signalMode === 'a_resoudre' && (
                       <div style={{ ...s.chipsRow, marginTop: 6 }}>
@@ -1083,7 +1157,7 @@ export default function AdminDashboard() {
             {/* ── Utilisateurs ── */}
             {tab === 'utilisateurs' && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Utilisateurs</h2>
                     <p style={s.pageSubtitle}>{usersTotal > 0 ? `${usersTotal} citoyens inscrits` : 'Aucun utilisateur'}</p>
@@ -1092,7 +1166,7 @@ export default function AdminDashboard() {
                     <div style={{ ...s.searchWrap, minWidth: 220 }}>
                       <span style={s.searchIcon}><MdSearch size={16} /></span>
                       <input
-                        style={s.searchInput}
+                        style={searchInputS}
                         placeholder="Rechercher nom, prénom, téléphone..."
                         value={usersSearch}
                         onChange={e => setUsersSearch(e.target.value)}
@@ -1101,7 +1175,7 @@ export default function AdminDashboard() {
                     </div>
                     <div style={s.searchWrap}>
                       <span style={s.searchIcon}><MdLocationOn size={16} /></span>
-                      <select style={s.searchInput} value={usersWilaya} onChange={(e) => { setUsersWilaya(e.target.value); setUsersPage(1); }}>
+                      <select style={searchInputS} value={usersWilaya} onChange={(e) => { setUsersWilaya(e.target.value); setUsersPage(1); }}>
                         <option value=''>Toutes les wilayas</option>
                         {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
                       </select>
@@ -1159,7 +1233,7 @@ export default function AdminDashboard() {
             {/* ── Employés ── */}
             {tab === 'employes' && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Employés</h2>
                     <p style={s.pageSubtitle}>{empTotal} employé{empTotal !== 1 ? 's' : ''}</p>
@@ -1171,14 +1245,14 @@ export default function AdminDashboard() {
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 20 }}>
                   <div style={s.searchWrap}>
                     <span style={s.searchIcon}>📍</span>
-                    <select style={s.searchInput} value={empWilaya} onChange={e => setEmpWilaya(e.target.value)}>
+                    <select style={searchInputS} value={empWilaya} onChange={e => setEmpWilaya(e.target.value)}>
                       <option value="">Toutes les wilayas</option>
                       {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
                     </select>
                   </div>
                   <div style={s.searchWrap}>
                     <span style={s.searchIcon}>🔘</span>
-                    <select style={s.searchInput} value={empStatut} onChange={e => setEmpStatut(e.target.value)}>
+                    <select style={searchInputS} value={empStatut} onChange={e => setEmpStatut(e.target.value)}>
                       <option value="">Tous les statuts</option>
                       <option value="actif">Actif</option>
                       <option value="inactif">Inactif</option>
@@ -1224,7 +1298,7 @@ export default function AdminDashboard() {
             {/* ── Camions ── */}
             {tab === 'camions' && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Camions</h2>
                     <p style={s.pageSubtitle}>{camTotal} camion{camTotal !== 1 ? 's' : ''}</p>
@@ -1236,14 +1310,14 @@ export default function AdminDashboard() {
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 20 }}>
                   <div style={s.searchWrap}>
                     <span style={s.searchIcon}>📍</span>
-                    <select style={s.searchInput} value={camWilaya} onChange={e => setCamWilaya(e.target.value)}>
+                    <select style={searchInputS} value={camWilaya} onChange={e => setCamWilaya(e.target.value)}>
                       <option value="">Toutes les wilayas</option>
                       {WILAYAS.map(w => <option key={w.id} value={w.nom}>{w.id.toString().padStart(2,'0')} · {w.nom}</option>)}
                     </select>
                   </div>
                   <div style={s.searchWrap}>
                     <span style={s.searchIcon}>🔘</span>
-                    <select style={s.searchInput} value={camStatut} onChange={e => setCamStatut(e.target.value)}>
+                    <select style={searchInputS} value={camStatut} onChange={e => setCamStatut(e.target.value)}>
                       <option value="">Tous les statuts</option>
                       <option value="disponible">Disponible</option>
                       <option value="en_service">En service</option>
@@ -1287,90 +1361,39 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* ── Collectes ── */}
+            {/* ── Collectes (Planification) — bientôt disponible ── */}
             {tab === 'collectes' && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Planification des collectes</h2>
-                    <p style={s.pageSubtitle}>{colTotal} collecte{colTotal !== 1 ? 's' : ''}</p>
                   </div>
-                  <button style={s.createBtn} onClick={async () => {
-                    const [eRes, cRes] = await Promise.all([getEmployes(1, 200), getCamions(1, 200)]);
-                    setEmpAll(eRes.data.data.items ?? []);
-                    setCamAll(cRes.data.data.items ?? []);
-                    setColForm({ employe_id: '', camion_id: '', date_prevue: '', creneau: '', notes: '', signalement_id: '' });
-                    setColFormError('');
-                    setShowCreateCol(true);
+                </div>
+                <div style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 14, padding: '80px 24px', background: Colors.white,
+                  borderRadius: 16, border: `1px solid ${Colors.greyBorder}`,
+                  textAlign: 'center',
+                }}>
+                  <div style={{
+                    width: 64, height: 64, borderRadius: '50%',
+                    background: Colors.purpleLight, color: Colors.purple,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    + Planifier une collecte
-                  </button>
-                </div>
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' as const, marginBottom: 20 }}>
-                  <div style={s.searchWrap}>
-                    <span style={s.searchIcon}>🔘</span>
-                    <select style={s.searchInput} value={colStatutFilter} onChange={e => setColStatutFilter(e.target.value)}>
-                      <option value="">Tous les statuts</option>
-                      <option value="planifiee">Planifiée</option>
-                      <option value="en_cours">En cours</option>
-                      <option value="terminee">Terminée</option>
-                      <option value="annulee">Annulée</option>
-                    </select>
+                    <MdHourglassEmpty size={30} />
                   </div>
+                  <h3 style={{ fontSize: 18, fontWeight: 800, color: Colors.primaryDark }}>À venir</h3>
+                  <p style={{ fontSize: 14, color: Colors.grey, maxWidth: 380, lineHeight: 1.6 }}>
+                    La planification des collectes sera disponible dans une prochaine version.
+                  </p>
                 </div>
-                {colLoading ? <Spinner color={Colors.primary} /> : !colList.length ? (
-                  <EmptyState icon={<MdAssignment size={16} />} message="Aucune collecte planifiée" />
-                ) : (
-                  <>
-                    <div style={s.list}>
-                      {colList.map(c => {
-                        const statutColor: Record<string, string> = { planifiee: Colors.orange, en_cours: Colors.blue, terminee: Colors.primary, annulee: Colors.red };
-                        const statutBg: Record<string, string>    = { planifiee: Colors.orangeLight, en_cours: Colors.blueLight, terminee: Colors.primaryLight, annulee: Colors.redLight };
-                        const sc = statutColor[c.statut] ?? Colors.grey;
-                        const sb = statutBg[c.statut]    ?? Colors.greyLight;
-                        return (
-                          <div key={c.id} style={r.card}>
-                            <div style={{ ...r.icon, background: sc + '22', color: sc }}>📋</div>
-                            <div style={r.info}>
-                              <p style={r.title}>
-                                {c.employe ? `${c.employe.prenom} ${c.employe.nom}` : '—'}
-                                {c.camion ? ` · 🚛 ${c.camion.immatriculation}` : ''}
-                              </p>
-                              <p style={r.meta}>
-                                📅 {c.date_prevue}{c.creneau ? ` · ${c.creneau}` : ''}
-                                {c.signalement ? ` · ⚠️ ${c.signalement.titre}` : ''}
-                              </p>
-                              {c.notes && <p style={{ ...r.date, fontStyle: 'italic' }}>{c.notes}</p>}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' as const }}>
-                              <span style={{ borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 700, background: sb, color: sc }}>
-                                {c.statut.replace('_', ' ')}
-                              </span>
-                              {c.statut === 'planifiee' && (
-                                <SmallBtn color={Colors.blue} onClick={() => modifierStatutCollecte(c.id, 'en_cours').then(() => loadCollectes(colPage))}><MdRefresh size={15} /></SmallBtn>
-                              )}
-                              {c.statut === 'en_cours' && (
-                                <SmallBtn color={Colors.primary} onClick={() => modifierStatutCollecte(c.id, 'terminee').then(() => loadCollectes(colPage))}><MdCheck size={15} /></SmallBtn>
-                              )}
-                              {(c.statut === 'planifiee' || c.statut === 'en_cours') && (
-                                <SmallBtn color={Colors.red} onClick={() => modifierStatutCollecte(c.id, 'annulee').then(() => loadCollectes(colPage))}><MdClose size={15} /></SmallBtn>
-                              )}
-                              <SmallBtn color={Colors.red} onClick={() => setDeleteColTarget(c.id)}><MdDelete size={16} /></SmallBtn>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <Paginator page={colPage} total={colTotal} pageSize={FLEET_PAGE_SIZE} onChange={setColPage} />
-                  </>
-                )}
               </div>
             )}
 
             {/* ── Événements ── */}
             {tab === 'evenements' && (
               <div>
-                <div style={s.pageHeader}>
+                <div style={pageHeaderS}>
                   <div>
                     <h2 style={s.pageTitle}>Événements</h2>
                     <p style={s.pageSubtitle}>{evTotal} événement{evTotal !== 1 ? 's' : ''} au total</p>
@@ -1478,6 +1501,84 @@ export default function AdminDashboard() {
                     {top20Loading ? 'Envoi en cours...' : 'Notifier le top 20'}
                   </button>
                 </div>
+
+                {/* ── Cartes cadeaux ── */}
+                <div style={{ marginTop: 48, paddingTop: 32, borderTop: `1px solid ${Colors.greyBorder}` }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: Colors.black, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <MdEmojiEvents size={20} color={Colors.primary} /> Cartes cadeaux — Top citoyens
+                  </h3>
+                  <p style={{ fontSize: 13, color: Colors.grey, marginBottom: 16, lineHeight: 1.6 }}>
+                    Choisis le nombre de gagnants à récompenser, charge le classement, saisis un code carte cadeau pour chacun puis envoie-les. Chaque code est transmis à son destinataire via une notification.
+                  </p>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const, marginBottom: 16 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: Colors.primaryDark }}>Nombre de gagnants :</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={cardN}
+                      onChange={e => setCardN(parseInt(e.target.value, 10) || 0)}
+                      style={{ ...searchInputS, width: 110, paddingLeft: 14 }}
+                    />
+                    <button
+                      style={{ ...s.createBtn, background: Colors.primary, opacity: cardLoading ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
+                      onClick={handleLoadTopCitoyens}
+                      disabled={cardLoading || cardN < 1}
+                    >
+                      <MdRefresh size={18} />
+                      {cardLoading ? 'Chargement...' : 'Charger le top'}
+                    </button>
+                  </div>
+
+                  {cardTop.length > 0 && (
+                    <>
+                      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8, marginBottom: 16, maxHeight: 480, overflowY: 'auto' as const, paddingRight: 6 }}>
+                        {cardTop.map((u, i) => (
+                          <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: Colors.white, border: `1px solid ${Colors.greyBorder}`, borderRadius: 10 }}>
+                            <div style={{ minWidth: 28, fontSize: 14, fontWeight: 800, color: Colors.primaryDark, textAlign: 'center' as const }}>
+                              {i + 1}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: Colors.primaryDark, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                                {u.prenom} {u.nom}
+                              </div>
+                              <div style={{ fontSize: 12, color: Colors.grey, marginTop: 2 }}>
+                                {u.wilaya ?? '—'} · {u.points_total} pts · niv. {u.niveau}
+                              </div>
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="Code carte cadeau"
+                              value={cardCodes[u.id] ?? ''}
+                              onChange={e => setCardCodes(prev => ({ ...prev, [u.id]: e.target.value }))}
+                              style={{ ...searchInputS, width: 200, paddingLeft: 14, fontFamily: 'monospace' }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      {cardErr && <p style={{ color: Colors.red, fontSize: 13, marginBottom: 12 }}>{cardErr}</p>}
+                      {cardMsg && <p style={{ color: Colors.primary, fontSize: 13, marginBottom: 12 }}>{cardMsg}</p>}
+
+                      <button
+                        style={{ ...s.createBtn, background: Colors.primary, opacity: cardSending ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 8 }}
+                        onClick={handleEnvoyerCartesCadeaux}
+                        disabled={cardSending}
+                      >
+                        <MdSave size={18} />
+                        {cardSending ? 'Envoi en cours...' : 'Envoyer les cartes cadeaux'}
+                      </button>
+                    </>
+                  )}
+
+                  {cardTop.length === 0 && (cardErr || cardMsg) && (
+                    <>
+                      {cardErr && <p style={{ color: Colors.red, fontSize: 13 }}>{cardErr}</p>}
+                      {cardMsg && <p style={{ color: Colors.primary, fontSize: 13 }}>{cardMsg}</p>}
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
@@ -1507,7 +1608,7 @@ export default function AdminDashboard() {
       {/* ── Detail panel (drawer) ── */}
       {detail && (
         <div style={s.overlay} onClick={closeDetail}>
-          <div style={s.panel} onClick={(e) => e.stopPropagation()}>
+          <div style={panelS} onClick={(e) => e.stopPropagation()}>
             <div style={s.panelHeader}>
               <div>
                 <h3 style={s.panelTitle}>
@@ -2984,4 +3085,33 @@ const lb: Record<string, React.CSSProperties> = {
   thumbRow: { position: 'absolute', bottom: 24, display: 'flex', gap: 8 },
   thumb:    { width: 56, height: 56, objectFit: 'cover', borderRadius: 8, cursor: 'pointer', opacity: 0.5, border: '2px solid transparent', transition: 'all 0.15s' },
   thumbActive: { opacity: 1, borderColor: Colors.white },
+};
+
+// ── Styles utilisés uniquement en mode mobile ─────────────────────────────────
+const sMobile: Record<string, React.CSSProperties> = {
+  header: {
+    position: 'sticky', top: 0, zIndex: 900,
+    display: 'flex', alignItems: 'center', gap: 8,
+    height: 56, padding: '0 12px', width: '100%',
+    background: Colors.white,
+    borderBottom: `1px solid ${Colors.greyBorder}`,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+  },
+  hamburger: {
+    width: 40, height: 40,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'none', border: 'none', borderRadius: 10,
+    cursor: 'pointer', color: Colors.purple, flexShrink: 0,
+  },
+  headerTitle: {
+    flex: 1, fontSize: 15, fontWeight: 700, color: Colors.primaryDark,
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+  },
+  backdrop: {
+    position: 'fixed', inset: 0,
+    background: 'rgba(10,15,40,0.5)',
+    backdropFilter: 'blur(2px)',
+    WebkitBackdropFilter: 'blur(2px)',
+    zIndex: 1050,
+  },
 };

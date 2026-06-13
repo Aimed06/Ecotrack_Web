@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://10.216.24.234:5000/api';
+const BASE_URL = 'http://192.168.1.36:5000/api';
 
 const api = axios.create({ baseURL: BASE_URL, timeout: 10000 });
 
@@ -127,6 +127,12 @@ export const supprimerCollecte = (id: number) =>
 
 export const notifierTop20 = () =>
   api.post('/admin/notifier-top20');
+
+export const getTopCitoyens = (limit = 20) =>
+  api.get('/admin/top-citoyens', { params: { limit } });
+
+export const envoyerCartesCadeaux = (codes: { utilisateur_id: number; code: string; rang?: number }[]) =>
+  api.post('/admin/envoyer-cartes-cadeaux', { codes });
 
 export const getSignalementsCritiques = (since?: string) =>
   api.get('/admin/signalements/critiques', { params: since ? { since } : {} });
