@@ -1,17 +1,19 @@
 import { useNavigate } from 'react-router-dom';
 import { Colors } from '../constants/colors';
+import { useViewport } from '../hooks/useViewport';
 import { MdShield, MdGroups, MdArrowForward, MdMailOutline } from 'react-icons/md';
 
 const CONTACT_EMAIL = 'contact@ecotrack.dz'; // ← remplace par ton adresse
 
 export default function Home() {
   const navigate = useNavigate();
+  const { isMobile } = useViewport();
 
   return (
-    <div style={s.page}>
+    <div style={{ ...s.page, padding: isMobile ? 16 : 24 }}>
       <div style={s.bg1} />
       <div style={s.bg2} />
-      <div style={s.card}>
+      <div style={{ ...s.card, padding: isMobile ? '32px 24px' : '48px 40px' }}>
         <div style={s.logo}>
           <div style={s.logoIconWrap}>
             <span style={{ fontSize: 36 }}>🌿</span>

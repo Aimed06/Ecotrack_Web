@@ -17,8 +17,10 @@ Pas de lint ni de tests configurés. TypeScript strict activé — erreurs via d
 
 - **Vite 6** · React 18 · TypeScript strict · React Router v6
 - Axios pour les appels API
-- **Leaflet** + react-leaflet + **react-leaflet-cluster** (carte admin + clustering)
-- react-icons
+
+- **react-leaflet** + Leaflet pour la carte (`AdminMap`) — tuiles OpenStreetMap (pas de Google Maps côté web)
+- `react-leaflet-cluster` pour le clustering des markers
+- `react-icons/md` pour toutes les icônes (Material Design)
 - Zéro bibliothèque UI — styles 100 % inline (`React.CSSProperties`)
 - Pas de state manager externe (useState local par page)
 
@@ -45,41 +47,87 @@ Pas de lint ni de tests configurés. TypeScript strict activé — erreurs via d
 
 ### API (`src/api.ts`)
 
-Instance Axios unique. `BASE_URL = http://<IP>:5000/api` — **changer l'IP** si le backend tourne ailleurs (alignée avec le frontend mobile). L'intercepteur injecte `Authorization: Bearer <token>`.
+
+Instance Axios unique. `BASE_URL` pointe vers l'IP locale du backend en haut du fichier — changer si le backend tourne ailleurs.
+
 
 Format backend : `{ success, data, message? }` (erreur : `{ success: false, error }`). Pour les listes (`/evenements`, `/signalements`, …) `res.data.data` est un **tableau direct**.
 
 Helpers regroupés par domaine : admin auth/stats/modération, associations (CRUD + modération), événements, signalements (dont `rejeterPhotosResolution`), points de collecte (liste publique + CRUD admin filtré), utilisateurs (classement + `getUtilisateursAdmin` + `banUtilisateur`), **employés / camions / collectes** (CRUD admin), config des points, `notifierTop20`, `getSignalementsCritiques`.
 
+### Responsive (`src/hooks/useViewport.ts`)
+
+Hook custom + breakpoints :
+- `mobile` : `< 640 px`
+- `tablet` : `640 – 1023 px`
+- `desktop` : `≥ 1024 px`
+
+```ts
+const { isMobile, isTablet, isDesktop } = useViewport();
+```
+
+**Patterns appliqués** quand `isMobile` est vrai :
+- **Sidebar** (260 px fixe) → **drawer slide-in** depuis la gauche avec backdrop + bouton hamburger dans un header sticky
+- **Layout** parent passe de `flex row` à `flex column`
+- **Panneau de détail latéral** (500 px) → plein écran
+- **Form rows** (2 inputs côte à côte) → empilés verticalement
+- **PageHeader** (titre + boutons) → empilé verticalement
+- **Grilles** `repeat(auto-fill, minmax(320px, 1fr))` → 1 colonne forcée
+- **Inputs de recherche** → `width: 100%`
+
+Le hook se met à jour automatiquement sur `resize` (event listener avec cleanup). Convention : déclarer les styles dérivés (`mainS`, `pageHeaderS`, etc.) juste avant le `return` du composant.
+
+CSS globales (`src/index.css`) liées au mobile :
+- `overflow-x: hidden` sur html/body
+- `font-size: 16px` sur inputs (anti-zoom iOS)
+- `-webkit-tap-highlight-color: transparent`
+
 ### Dashboard Admin (`pages/admin/AdminDashboard.tsx`)
 
 Charge en parallèle `GET /admin/stats` et `GET /admin/moderation` au montage.
 
-Onglets : Statistiques · Associations · Événements · Signalements · Points de collecte · Utilisateurs · **Employés · Camions · Collectes · Config**. Carte dans `pages/admin/AdminMap.tsx` (Leaflet + clusters).
+**Onglets** (groupés en 3 catégories — `Modération`, `Logistique`, `Système`) :
+- **Modération** : Statistiques, Carte (`AdminMap`), Associations, Événements, Signalements, Points de collecte, Utilisateurs
+- **Logistique** : Employés, Camions, Planification (collectes)
+- **Système** : Configuration des points
 
-Panneau de détail latéral (drawer droit) via le bouton 👁. Composants de détail séparés (`SignalementDetail`, `EvenementDetail`, `AssocDetail`, `PointDetail`).
+**Note** : la page **Planification** affiche actuellement un placeholder "À venir" — le formulaire de création et la liste sont retirés du rendu mais l'API et l'état restent en place pour ré-activation future.
 
-Actions de modération (depuis la liste ET le détail) :
-- Association : `PATCH /admin/associations/:id` → `{ statut: 'validee'|'rejetee', motif_rejet? }` (rejet → modale de motif). Création `POST /admin/associations`, suppression `DELETE`.
-- Événement : `PATCH /admin/evenements/:id` → `{ statut: 'annule'|'publie' }` (masquer / republier), `DELETE` pour supprimer.
-- Signalement : `PATCH /signalements/:id/statut` → `{ statut: 'publie'|'rejete'|'resolu', motif_rejet? }`. `DELETE /signalements/:id/photos-resolution` pour rejeter les photos de preuve.
-- Point de collecte : `PATCH /admin/points-collecte/:id` (édition complète) ou `/points-collecte/:id/statut`, `DELETE` pour supprimer.
-- Utilisateur : `PATCH /admin/utilisateurs/:id/ban` → `{ actif }`.
-- Collecte : `POST/PATCH/DELETE /admin/collectes` (planifier, changer statut, supprimer) ; idem employés et camions.
-- Config : `GET/PATCH /admin/config` (barèmes de points).
+Panneau de détail latéral (drawer droit, 500 px desktop / plein écran mobile) : s'ouvre via le bouton 👁 sur chaque ligne. Composants de détail séparés : `SignalementDetail`, `EvenementDetail`, `AssocDetail`, `PointDetail`.
+
+Actions de modération disponibles depuis la liste ET depuis le panneau de détail :
+- Association : `PATCH /admin/associations/:id` → `{ statut: 'validee'|'rejetee', motif_rejet? }` — le rejet ouvre une modale pour saisir le motif
+- Événement : `PATCH /admin/evenements/:id` → `{ statut: 'publie'|'annule' }`
+- Signalement : `PATCH /signalements/:id/statut` → `{ statut: 'publie'|'rejete'|'resolu', motif_rejet? }`
+- Point de collecte : `PATCH /points-collecte/:id/statut` → `{ statut: 'actif'|'inactif' }`
+- Utilisateur : `PATCH /admin/utilisateurs/:id/ban` → `{ actif: boolean }`
 
 Coordonnées GPS : `latitude`/`longitude` arrivent en **string** depuis MySQL → toujours `parseFloat()` avant `.toFixed()` ou usage Leaflet.
 
+### Carte Admin (`pages/admin/AdminMap.tsx`)
+
+3 couches superposables : **Signalements** (rouge), **Points de collecte** (vert), **Événements** (violet). Markers SVG custom via `L.divIcon` + clustering par couche. Filtres : wilaya, type de déchet (pour points), degré de pollution (pour signalements), photos de résolution (signalements à valider).
+
 ### Dashboard Association (`pages/association/AssocDashboard.tsx`)
 
-Vues `evenements` (liste) et `creer` (formulaire). Filtre : `GET /evenements?association_id=<id>&limit=100` — renvoie tous les statuts (le backend ne force pas `publie` quand `association_id` est fourni). Gestion du profil et du mot de passe via `/associations/profil` et `/associations/mot-de-passe`.
+Trois vues : `evenements` (liste avec QR code), `creer` (formulaire), `profil` (logo + description + photos + mot de passe).
 
-### Styles & constantes
+Filtre par association : `GET /evenements?association_id=<id>&limit=100` — renvoie tous les statuts (en_attente, publie, annule, termine) car le backend ne force pas `statut: 'publie'` quand `association_id` est fourni.
+
+QR code : récupéré via `GET /evenements/:id/qrcode` (data URI base64), affiché dans une modale avec bouton de téléchargement PNG.
 
 - Palette `src/constants/colors.ts` (identique au mobile) : `Colors.primary` (#1D9E75), `Colors.purple` admin (#534AB7). **Jamais de couleur en dur**.
 - Constantes métier partagées : `src/constants/wilayas.ts`, `src/constants/typesDechet.ts`.
 - Tous les styles sont des `Record<string, React.CSSProperties>` déclarés en bas de chaque fichier (convention `const s = { ... }`).
 
-## État
+Palette dans `src/constants/colors.ts` (identique au frontend mobile).
+- Couleur principale : `Colors.primary` (#00C48C, vert)
+- Couleur admin : `Colors.purple` (#534AB7)
+- **Jamais de couleur en dur** — toujours `Colors.*`
+- Tous les styles sont des objets `Record<string, React.CSSProperties>` déclarés en bas de chaque fichier (convention `const s = { ... }`)
+- Styles **mobile uniquement** : objet séparé `sMobile` (ex. `AdminDashboard.tsx`) pour le header sticky, hamburger, backdrop
+- Styles **dérivés** : variables locales (`mainS`, `pageHeaderS`, `panelS`, etc.) calculées avant le `return` selon `isMobile`
 
-Dashboards admin et association complets.
+## Points à terminer
+
+Aucun — le dashboard est complet et responsive (mobile / tablet / desktop).

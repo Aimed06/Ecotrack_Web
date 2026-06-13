@@ -7,6 +7,7 @@ import { Colors } from '../../constants/colors';
 import { getSignalements, getPointsCollecte, getEvenements, modererSignalement, rejeterPhotosResolution } from '../../api';
 import WILAYAS from '../../constants/wilayas';
 import TYPES_DECHET from '../../constants/typesDechet';
+import { useViewport } from '../../hooks/useViewport';
 import {
   MdWarning, MdRecycling, MdEvent, MdHandyman, MdCameraAlt, MdCheckCircle,
   MdCheck, MdClose, MdLocationOn, MdHome, MdSchedule, MdBusiness,
@@ -110,6 +111,7 @@ const LAYERS: { key: LayerKey; label: string; color: string; icon: React.ReactNo
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function AdminMap() {
+  const { isMobile } = useViewport();
   const [signalements, setSignalements] = useState<any[]>([]);
   const [pointsCollecte, setPointsCollecte] = useState<any[]>([]);
   const [evenements, setEvenements] = useState<any[]>([]);
@@ -194,10 +196,17 @@ export default function AdminMap() {
     );
   }
 
+  // Styles dérivés mobile
+  const controlsS = isMobile
+    ? { ...ms.controls, gap: 14, padding: '12px 14px', flexDirection: 'column' as const }
+    : ms.controls;
+  const wilayaSelectS = isMobile ? { ...ms.wilayaSelect, width: '100%', minWidth: 0 } : ms.wilayaSelect;
+  const mapWrapS = isMobile ? { ...ms.mapWrap, height: 'calc(100vh - 240px)', minHeight: 360 } : ms.mapWrap;
+
   return (
     <div style={ms.wrap}>
       {/* ── Controls ── */}
-      <div style={ms.controls}>
+      <div style={controlsS}>
         <div style={ms.controlsLeft}>
           <p style={ms.controlTitle}>Couches</p>
           <div style={ms.layerBtns}>
@@ -220,7 +229,7 @@ export default function AdminMap() {
         <div style={ms.wilayaWrap}>
           <p style={ms.controlTitle}>Wilaya</p>
           <select
-            style={ms.wilayaSelect}
+            style={wilayaSelectS}
             value={wilaya ?? ''}
             onChange={e => setWilaya(e.target.value || null)}
           >
@@ -293,7 +302,7 @@ export default function AdminMap() {
       </div>
 
       {/* ── Map ── */}
-      <div style={ms.mapWrap}>
+      <div style={mapWrapS}>
         <MapContainer
           center={[28.0339, 1.6596]}
           zoom={5}

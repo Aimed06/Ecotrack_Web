@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Colors } from '../../constants/colors';
 import { getEvenements, creerEvenement, getEvenementQRCode, updateProfilAssociation, getProfilAssociation, changerMotDePasseAssociation } from '../../api';
 import WILAYAS from '../../constants/wilayas';
+import { useViewport } from '../../hooks/useViewport';
 import {
   MdCalendarToday, MdAddCircle, MdBusiness, MdLogout, MdQrCode,
   MdCameraAlt, MdHourglassEmpty, MdCheckCircle, MdCancel, MdFlag,
   MdLocationOn, MdAllInclusive, MdWarning, MdDownload, MdClose, MdLock,
+  MdMenu,
 } from 'react-icons/md';
 
 type View = 'evenements' | 'creer' | 'profil';
@@ -22,6 +24,8 @@ interface QRModal { evenement: any; qrCode: string }
 
 export default function AssocDashboard() {
   const navigate = useNavigate();
+  const { isMobile } = useViewport();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [assoc, setAssoc] = useState<any>(() => { try { return JSON.parse(localStorage.getItem('assoc') ?? '{}'); } catch { return {}; } });
   const assocId: number | undefined = assoc.id;
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -226,9 +230,39 @@ export default function AssocDashboard() {
   const publishedCount  = evenements.filter(e => e.statut === 'publie').length;
   const pendingCount    = evenements.filter(e => e.statut === 'en_attente').length;
 
+  const closeDrawer = () => setDrawerOpen(false);
+  const selectView = (v: View) => { setView(v); closeDrawer(); };
+
+  // ── Styles dérivés pour le mode mobile ──
+  const rowS = isMobile ? { ...s.row, flexDirection: 'column' as const, gap: 12 } : s.row;
+  const pageHeaderS = isMobile
+    ? { ...s.pageHeader, flexDirection: 'column' as const, alignItems: 'stretch' as const, gap: 12 }
+    : s.pageHeader;
+  const gridS = isMobile
+    ? { ...s.grid, gridTemplateColumns: '1fr' }
+    : s.grid;
+
   return (
-    <div style={s.layout}>
-      <aside style={s.sidebar}>
+    <div style={{ ...s.layout, ...(isMobile ? { flexDirection: 'column' as const } : {}) }}>
+      {isMobile && (
+        <header style={s.mobileHeader}>
+          <button style={s.hamburger} onClick={() => setDrawerOpen(true)} aria-label="Menu">
+            <MdMenu size={22} />
+          </button>
+          <div style={s.mobileHeaderTitle}>{assoc.nom ?? 'EcoTrack'}</div>
+          <div style={s.mobileHeaderSpacer} />
+        </header>
+      )}
+
+      {isMobile && drawerOpen && (
+        <div style={s.drawerBackdrop} onClick={closeDrawer} />
+      )}
+
+      <aside style={{
+        ...s.sidebar,
+        ...(isMobile ? s.sidebarMobile : {}),
+        ...(isMobile && drawerOpen ? s.sidebarMobileOpen : {}),
+      }}>
         <div style={s.sidebarTop}>
           <div style={s.logo}>EcoTrack</div>
           <div style={s.roleTag}>Association</div>
@@ -289,7 +323,7 @@ export default function AssocDashboard() {
             <button
               key={item.id}
               style={{ ...s.navItem, ...(view === item.id ? s.navItemActive : {}) }}
-              onClick={() => setView(item.id)}
+              onClick={() => selectView(item.id)}
             >
               <span style={{ display: 'flex', alignItems: 'center' }}>{item.icon}</span>
               <span style={{ flex: 1 }}>{item.label}</span>
@@ -302,11 +336,14 @@ export default function AssocDashboard() {
         </button>
       </aside>
 
-      <main style={s.main}>
+      <main style={{
+        ...s.main,
+        ...(isMobile ? s.mainMobile : {}),
+      }}>
         {/* ── Mes événements ── */}
         {view === 'evenements' && (
           <div>
-            <div style={s.pageHeader}>
+            <div style={pageHeaderS}>
               <div>
                 <h2 style={s.pageTitle}>Mes événements</h2>
                 <p style={{ fontSize: 13, color: Colors.grey, marginTop: 2 }}>
@@ -333,7 +370,7 @@ export default function AssocDashboard() {
                 <button style={s.emptyBtn} onClick={() => setView('creer')}>Créer votre premier événement</button>
               </div>
             ) : (
-              <div style={s.grid}>
+              <div style={gridS}>
                 {evenements.map((ev) => {
                   const cfg    = STATUT_CONFIG[ev.statut] ?? STATUT_CONFIG.publie;
                   const inscrits = ev.participations?.length ?? 0;
@@ -494,7 +531,7 @@ export default function AssocDashboard() {
                 </label>
               </Field>
 
-              <div style={s.row}>
+              <div style={rowS}>
                 <Field label="Date et heure de début *">
                   <input style={s.input} type="datetime-local" value={dateDebut}
                     onChange={(e) => setDateDebut(e.target.value)} required />
@@ -505,7 +542,7 @@ export default function AssocDashboard() {
                 </Field>
               </div>
 
-              <div style={s.row}>
+              <div style={rowS}>
                 <Field label="Wilaya *">
                   <select style={s.input} value={wilaya} onChange={(e) => setWilaya(e.target.value)}>
                     <option value=''>— Choisir une wilaya —</option>
@@ -605,7 +642,7 @@ export default function AssocDashboard() {
                   placeholder="Ex : 12 Rue des Pins, Hydra, Alger" maxLength={500} />
               </Field>
 
-              <div style={s.row}>
+              <div style={rowS}>
                 <Field label="Wilaya">
                   <select style={s.input} value={profilWilaya} onChange={e => setProfilWilaya(e.target.value)}>
                     <option value=''>— Choisir une wilaya —</option>
@@ -715,7 +752,7 @@ export default function AssocDashboard() {
                     <input style={s.input} type="password" value={mdpActuel}
                       onChange={e => setMdpActuel(e.target.value)} placeholder="••••••••" required />
                   </Field>
-                  <div style={s.row}>
+                  <div style={rowS}>
                     <Field label="Nouveau mot de passe">
                       <input style={s.input} type="password" value={mdpNouveau}
                         onChange={e => setMdpNouveau(e.target.value)} placeholder="••••••••" required />
@@ -802,6 +839,64 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const s: Record<string, React.CSSProperties> = {
   layout:     { display: 'flex', minHeight: '100vh', background: '#F0F2F8' },
   sidebar:    { width: 250, background: Colors.white, borderRight: `1px solid ${Colors.greyBorder}`, display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh', flexShrink: 0, boxShadow: '2px 0 12px rgba(0,0,0,0.04)' },
+
+  // ── Mobile : sidebar → drawer slide-in ────────────────────────────────────
+  sidebarMobile: {
+    position: 'fixed' as const,
+    top: 0, left: 0, bottom: 0,
+    height: '100vh',
+    width: 280, maxWidth: '85vw',
+    transform: 'translateX(-100%)',
+    transition: 'transform 0.28s ease',
+    zIndex: 1100,
+    boxShadow: '0 0 40px rgba(0,0,0,0.18)',
+  },
+  sidebarMobileOpen: {
+    transform: 'translateX(0)',
+  },
+  drawerBackdrop: {
+    position: 'fixed' as const,
+    inset: 0,
+    background: 'rgba(10,15,40,0.5)',
+    backdropFilter: 'blur(2px)',
+    WebkitBackdropFilter: 'blur(2px)',
+    zIndex: 1050,
+  },
+  mobileHeader: {
+    position: 'sticky' as const,
+    top: 0,
+    zIndex: 900,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    height: 56,
+    padding: '0 12px',
+    background: Colors.white,
+    borderBottom: `1px solid ${Colors.greyBorder}`,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+    width: '100%',
+  },
+  hamburger: {
+    width: 40, height: 40,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'none', border: 'none', borderRadius: 10,
+    cursor: 'pointer', color: Colors.primaryDark, flexShrink: 0,
+  },
+  mobileHeaderTitle: {
+    flex: 1,
+    fontSize: 15, fontWeight: 700,
+    color: Colors.primaryDark,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  mobileHeaderSpacer: { width: 40, flexShrink: 0 },
+  mainMobile: {
+    padding: '16px',
+    flex: 1,
+    width: '100%',
+  },
+
   sidebarTop: { padding: '24px 20px 16px', borderBottom: `1px solid ${Colors.greyBorder}` },
   logo:       { fontSize: 18, fontWeight: 800, color: Colors.primaryDark, marginBottom: 8 },
   roleTag:    { display: 'inline-block', background: Colors.primaryLight, color: Colors.primaryDark, borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 700 },

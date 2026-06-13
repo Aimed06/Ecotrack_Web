@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Colors } from '../../constants/colors';
 import { loginAdmin } from '../../api';
+import { useViewport } from '../../hooks/useViewport';
 import { MdAdminPanelSettings, MdEmail, MdLock, MdLogin, MdArrowBack } from 'react-icons/md';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
+  const { isMobile } = useViewport();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,10 +31,10 @@ export default function AdminLogin() {
   };
 
   return (
-    <div style={s.page}>
+    <div style={{ ...s.page, padding: isMobile ? 16 : 24 }}>
       <div style={s.bg1} />
       <div style={s.bg2} />
-      <div style={s.card}>
+      <div style={{ ...s.card, padding: isMobile ? '32px 24px' : '44px 40px' }}>
         <div style={s.header}>
           <div style={s.iconWrap}>
             <MdAdminPanelSettings size={32} color={Colors.purple} />
